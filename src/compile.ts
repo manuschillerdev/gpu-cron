@@ -14,12 +14,12 @@ class CompileError extends Error {
     super(message);
   }
 }
-const unsupported = (message: string): never => {
+function unsupported(message: string): never {
   throw new CompileError('unsupported-syntax', message);
-};
-const invalid = (message: string): never => {
+}
+function invalid(message: string): never {
   throw new CompileError('invalid-value', message);
-};
+}
 const cardinal =
   'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'.split(
     ' ',
@@ -70,9 +70,9 @@ function named(t: TokenPrediction, months = false): number[] {
 function namedSet(
   tokens: TokenPrediction[],
   role: TokenPrediction['role'],
-  months = false,
-  consumed = new Set<TokenPrediction>(),
+  consumed: Set<TokenPrediction>,
 ): number[] {
+  const months = role === 'month' || role === 'excluded-month';
   const result: number[] = [];
   const selected = tokens.map((t, i) => ({ t, i })).filter(({ t }) => t.role === role);
   for (let j = 0; j < selected.length; j++) {
@@ -116,7 +116,7 @@ export function compile(
     if (family !== 'minutes' && family !== 'hours' && get('quantity').length)
       unsupported('An interval quantity conflicts with the clock-based recurrence.');
     const schedule: Schedule = {
-      family: family as Exclude<Family, 'invalid'>,
+      family,
       minutes: [0],
       hours: [0],
       daysOfMonth: null,
@@ -197,7 +197,7 @@ export function compile(
           message: `Interpreted the predicted hour as ${String(hour).padStart(2, '0')}:00 using a 24-hour clock.`,
         });
       if (family === 'weekly' || family === 'biweekly') {
-        const days = namedSet(tokens, 'weekday', false, consumedRanges);
+        const days = namedSet(tokens, 'weekday', consumedRanges);
         if (!days.length) unsupported('The model did not identify scheduled weekdays.');
         schedule.weekdays = days;
       } else if (family === 'daily' && get('weekday').length)
@@ -232,10 +232,10 @@ export function compile(
           message: `Alternate weeks are anchored to the local week starting ${anchorWeek} (Monday). Preserve anchorWeek when reusing this schedule.`,
         });
     }
-    const included = namedSet(tokens, 'month', true, consumedRanges);
+    const included = namedSet(tokens, 'month', consumedRanges);
     if (included.length) schedule.months = included;
-    const excludedMonths = namedSet(tokens, 'excluded-month', true, consumedRanges),
-      excludedDays = namedSet(tokens, 'excluded-weekday', false, consumedRanges);
+    const excludedMonths = namedSet(tokens, 'excluded-month', consumedRanges),
+      excludedDays = namedSet(tokens, 'excluded-weekday', consumedRanges);
     if ((excludedMonths.length || excludedDays.length) && !get('exclusion').length)
       unsupported('An excluded value has no predicted exclusion marker.');
     if (get('exclusion').length && !excludedMonths.length && !excludedDays.length)

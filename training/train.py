@@ -8,7 +8,6 @@ import time
 from functools import partial
 from importlib.metadata import version
 from pathlib import Path
-from typing import cast
 
 import mlx.core as mx
 import mlx.optimizers as optim
@@ -102,22 +101,23 @@ class Model(nn.Module):
 
     def __call__(self, ids):
         scores = self.token_scores(ids)
-        mask = (ids != 0)[..., None]
-        family = mx.sum(scores[..., :FAMILY_COUNT], axis=1) / mx.maximum(
-            mx.sum(mask, axis=1), 1
-        )
+        family = family_scores(scores, ids)
         return mx.concatenate(
             [family, scores[..., FAMILY_COUNT:].reshape(ids.shape[0], -1)], axis=1
         )
+
+
+def family_scores(scores, ids):
+    """Average family logits over real tokens, excluding padding."""
+    count = mx.sum(ids != 0, axis=1, keepdims=True)
+    return mx.sum(scores[..., :FAMILY_COUNT], axis=1) / mx.maximum(count, 1)
 
 
 def training_step(model, optimizer):
     def loss_fn(net, x, y, roles):
         scores = net.token_scores(x)
         mask = x != 0
-        family = mx.sum(scores[..., :FAMILY_COUNT], axis=1) / mx.maximum(
-            mx.sum(mask, axis=1, keepdims=True), 1
-        )
+        family = family_scores(scores, x)
         family_loss = nn.losses.cross_entropy(family, y, reduction="mean")
         tag_loss = nn.losses.cross_entropy(scores[..., FAMILY_COUNT:], roles)
         return family_loss + mx.sum(tag_loss * mask) / mx.maximum(mx.sum(mask), 1)
@@ -143,8 +143,9 @@ def use_gpu():
     mx.random.seed(SEED)
 
 
-def arrays(rows, length=None):
-    length = length or 2 ** (max(len(r[2]) for r in rows) - 1).bit_length()
+def arrays(rows):
+    # Pad to a power of two so every parallel scan has the same shape.
+    length = 2 ** (max(len(r[2]) for r in rows) - 1).bit_length()
     return (
         mx.array(np.stack([features(t, length) for t, _, _ in rows])),
         mx.array([f for _, f, _ in rows], dtype=mx.int32),
@@ -226,7 +227,7 @@ def pack_weights(model):
     return payload, artifact, len(packed)
 
 
-def fit(sets, manifest, epochs, resume):
+def fit(sets, epochs):
     training = [row(item) for item in sets["train"]]
     x, y, r = arrays(training)
     # Equal family sampling prevents rare interval/unsupported meanings being swamped
@@ -241,33 +242,10 @@ def fit(sets, manifest, epochs, resume):
     if any(not len(ids) for ids in family_indices):
         raise ValueError("Training split must represent every family")
     model = Model()
-    checkpoint = ROOT / "training/checkpoint.safetensors"
-    state_path = ROOT / "training/optimizer.safetensors"
-    progress_path = ROOT / "training/progress.json"
     optimizer = optim.AdamW(
         learning_rate=0.003, weight_decay=0.001, bias_correction=True
     )
-    start_epoch = 0
-    if resume:
-        progress = json.loads(progress_path.read_text())
-        if (
-            progress["epochs"] != epochs
-            or progress["dataVersion"] != VERSION
-            or progress.get("splitIdentity") != manifest["splits"]
-            or progress.get("trainingSourceSha256") != sha(Path(__file__))
-            or progress.get("dataSourceSha256") != sha(ROOT / "training/data.py")
-        ):
-            raise ValueError("Resume requires the original epochs and dataset version")
-        model.load_weights(str(checkpoint))
-        saved_state = mx.load(str(state_path))
-        if not isinstance(saved_state, dict):
-            raise ValueError("Optimizer checkpoint must contain named tensors")
-        optimizer.state = tree_unflatten(list(saved_state.items()))
-        mx.random.state = [
-            mx.array(v, dtype=mx.uint32) for v in progress["randomState"]
-        ]
-        start_epoch = progress["epoch"] + 1
-    model.qat = start_epoch >= epochs - 12
+    model.qat = epochs <= 12
     step, state = training_step(model, optimizer)
     mx.eval(x, y, r, state)
     train_started = time.perf_counter()
@@ -275,7 +253,7 @@ def fit(sets, manifest, epochs, resume):
         f"MLX {version('mlx')} / {mx.device_info()['device_name']}; {len(training)} sequences, length {x.shape[1]}",
         flush=True,
     )
-    for epoch in range(start_epoch, epochs):
+    for epoch in range(epochs):
         if epoch == epochs - 12:
             model.qat = True
             step, state = training_step(
@@ -299,23 +277,6 @@ def fit(sets, manifest, epochs, resume):
             ids = order[start : start + 256]
             loss = step(x[ids], y[ids], r[ids])
             mx.eval(state, loss)
-        model.save_weights(str(checkpoint))
-        mx.save_safetensors(str(state_path), dict(tree_flatten(optimizer.state)))
-        progress_path.write_text(
-            json.dumps(
-                {
-                    "epoch": epoch,
-                    "epochs": epochs,
-                    "dataVersion": VERSION,
-                    "splitIdentity": manifest["splits"],
-                    "trainingSourceSha256": sha(Path(__file__)),
-                    "dataSourceSha256": sha(ROOT / "training/data.py"),
-                    "randomState": [
-                        a.tolist() for a in cast(list[mx.array], mx.random.state)
-                    ],
-                }
-            )
-        )
         print(
             f"epoch {epoch + 1}/{epochs} loss={loss.item():.5f} qat={model.qat}",
             flush=True,
@@ -329,7 +290,6 @@ def fit(sets, manifest, epochs, resume):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=45)
-    parser.add_argument("--resume", action="store_true")
     parser.add_argument(
         "--data-dir",
         type=Path,
@@ -346,9 +306,7 @@ def main():
     manifest = write_manifest(
         sets, CANDIDATE / "data"
     )  # Snapshot the loaded records and split identity before fitting.
-    model, train_seconds, training_examples = fit(
-        sets, manifest, args.epochs, args.resume
-    )
+    model, train_seconds, training_examples = fit(sets, args.epochs)
     validation = [row(item) for item in sets["development"]]
     payload, artifact, packed_bytes = pack_weights(model)
     (CANDIDATE / "weights.json").write_text(artifact)

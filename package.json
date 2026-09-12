@@ -35,7 +35,7 @@
     "evaluate:cron:candidate": "node scripts/evaluate-cron.mjs --candidate --check",
     "promote:cron": "node scripts/promote-model.mjs",
     "check:python": "mise run check:python",
-    "format": "prettier --write 'src/**/*.ts' scripts/evaluate-cron.mjs scripts/promote-model.mjs scripts/size.mjs && uv run --locked --project training ruff format training"
+    "format": "prettier --write 'src/**/*.ts' 'demo/**/*.{ts,css}' index.html scripts/cron-reference.mjs scripts/evaluate-cron.mjs scripts/promote-model.mjs scripts/size.mjs && uv run --locked --project training ruff format training"
   },
   "devDependencies": {
     "@typescript/native-preview": "7.0.0-dev.20260707.2",

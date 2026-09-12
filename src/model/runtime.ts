@@ -13,58 +13,153 @@ const offset = (name: string) => {
   if (!segment) throw new Error(`Missing model tensor ${name}`);
   return segment.offset;
 };
-/** Constants and operators are specialized for this scan network at initialization. */
+/** The five model operations below mirror Model.token_scores in training/train.py. */
 function shaders(): string[] {
-  const E = offset('embedding.weight'),
-    A = offset('affine.weight'),
-    AB = offset('affine.bias');
-  const W = offset('hidden.weight'),
-    WB = offset('hidden.bias'),
-    O = offset('output.weight'),
-    OB = offset('output.bias');
-  const common = `@group(0) @binding(0) var<storage,read> ids:array<f32>;
-@group(0) @binding(1) var<storage,read> w:array<f32>;
-@group(0) @binding(2) var<storage,read> src:array<f32>;
-@group(0) @binding(3) var<storage,read_write> dst:array<f32>;
-@group(0) @binding(4) var<storage,read_write> hidden:array<f32>;
-@group(0) @binding(5) var<storage,read_write> out:array<f32>;
-@group(0) @binding(6) var<uniform> p:vec4<u32>;
-fn embedding(id:u32,k:u32)->f32 {
- if(id==0u){return 0.0;}let bits=id-1u;
- return (w[${E}u+(bits&1023u)*${H}u+k]+w[${E}u+(1024u+((bits>>10u)&255u))*${H}u+k]+w[${E}u+(1280u+((bits>>18u)&31u))*${H}u+k])*0.5773502691896258;
+  const embeddingWeight = offset('embedding.weight');
+  const affineWeight = offset('affine.weight');
+  const affineBias = offset('affine.bias');
+  const hiddenWeight = offset('hidden.weight');
+  const hiddenBias = offset('hidden.bias');
+  const outputWeight = offset('output.weight');
+  const outputBias = offset('output.bias');
+
+  const common = `
+struct Batch { rows: u32, length: u32 }
+@group(0) @binding(0) var<storage, read> ids: array<f32>;
+@group(0) @binding(1) var<storage, read> weights: array<f32>;
+@group(0) @binding(2) var<storage, read> source: array<f32>;
+@group(0) @binding(3) var<storage, read_write> destination: array<f32>;
+@group(0) @binding(4) var<storage, read_write> hidden: array<f32>;
+@group(0) @binding(5) var<storage, read_write> output: array<f32>;
+@group(0) @binding(6) var<uniform> batch: Batch;
+
+fn embedding(id: u32, channel: u32) -> f32 {
+  if (id == 0u) { return 0.0; }
+  let bits = id - 1u;
+  let word = bits & 1023u;
+  let consonants = 1024u + ((bits >> 10u) & 255u);
+  let shape = 1280u + ((bits >> 18u) & 31u);
+  return (
+    weights[${embeddingWeight}u + word * ${H}u + channel] +
+    weights[${embeddingWeight}u + consonants * ${H}u + channel] +
+    weights[${embeddingWeight}u + shape * ${H}u + channel]
+  ) * 0.5773502691896258;
 }
-fn token(i:u32)->u32 { return u32(ids[(i/p.y)*${FEATURE_COUNT}u+i%p.y]); }
+
+fn token(index: u32) -> u32 {
+  let row = index / batch.length;
+  let position = index % batch.length;
+  return u32(ids[row * ${FEATURE_COUNT}u + position]);
+}
 `;
-  const kernel = (body: string) =>
-    common +
-    `@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) g:vec3<u32>){${body}}`;
-  const embed = kernel(`let i=g.x/${H}u; let c=g.x%${H}u; if(i>=p.x*p.y){return;}
-let id=token(i); var a=1.0; var b=0.0;
-if(id!=0u){ var ga=w[${AB}u+c]; var gb=w[${AB + H}u+c];
-for(var k=0u;k<${H}u;k++){let e=embedding(id,k); ga+=e*w[${A}u+c*${H}u+k]; gb+=e*w[${A + H * H}u+c*${H}u+k];}
-a=1.0/(1.0+exp(-ga)); b=tanh(gb); }
-let base=i*${4 * H}u+c*2u;dst[base]=a;dst[base+1u]=b;dst[base+${2 * H}u]=a;dst[base+${2 * H + 1}u]=b;`);
+  const kernel = (body: string) => `${common}
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) thread: vec3<u32>) {
+${body}
+}
+`;
+
+  // Each token/channel starts with a gate a and candidate b for h = a*h_previous + b.
+  // Store the same (a, b) pair for the forward and backward scans.
+  const embed = kernel(`
+  let index = thread.x / ${H}u;
+  let channel = thread.x % ${H}u;
+  if (index >= batch.rows * batch.length) { return; }
+  let id = token(index);
+  var a = 1.0;
+  var b = 0.0;
+  if (id != 0u) {
+    var gate = weights[${affineBias}u + channel];
+    var candidate = weights[${affineBias + H}u + channel];
+    for (var k = 0u; k < ${H}u; k++) {
+      let value = embedding(id, k);
+      gate += value * weights[${affineWeight}u + channel * ${H}u + k];
+      candidate += value * weights[${affineWeight + H * H}u + channel * ${H}u + k];
+    }
+    a = 1.0 / (1.0 + exp(-gate));
+    b = tanh(candidate);
+  }
+  let base = index * ${4 * H}u + channel * 2u;
+  destination[base] = a;
+  destination[base + 1u] = b;
+  destination[base + ${2 * H}u] = a;
+  destination[base + ${2 * H + 1}u] = b;
+`);
+
+  // Compose pairs at distances 1, 2, 4, ... . Padding is the identity pair (1, 0).
   const scans = Array.from({ length: SCAN_LEVELS }, (_, level) =>
-    kernel(`let i=g.x/${2 * H}u;let c=g.x%${2 * H}u;if(i>=p.x*p.y){return;}
-let pos=i%p.y;let base=i*${4 * H}u+c*2u;var a=src[base];var b=src[base+1u];
-let forward=c<${H}u;let valid=select(pos+${2 ** level}u<p.y,pos>=${2 ** level}u,forward);
-if(valid){let other=select(i+${2 ** level}u,i-${2 ** level}u,forward)*${4 * H}u+c*2u;b+=a*src[other+1u];a*=src[other];}
-dst[base]=a;dst[base+1u]=b;`),
+    kernel(`
+  let index = thread.x / ${2 * H}u;
+  let channel = thread.x % ${2 * H}u;
+  if (index >= batch.rows * batch.length) { return; }
+  let position = index % batch.length;
+  let base = index * ${4 * H}u + channel * 2u;
+  var a = source[base];
+  var b = source[base + 1u];
+  let forward = channel < ${H}u;
+  let distance = ${2 ** level}u;
+  let valid = select((position + distance < batch.length), (position >= distance), forward);
+  if (valid) {
+    let neighbor = select(index + distance, index - distance, forward);
+    let other = neighbor * ${4 * H}u + channel * 2u;
+    b += a * source[other + 1u];
+    a *= source[other];
+  }
+  destination[base] = a;
+  destination[base + 1u] = b;
+`),
   );
-  const project = kernel(`let i=g.x/32u;let c=g.x%32u;if(i>=p.x*p.y){return;}
-let id=token(i);var sum=w[${WB}u+c];
-for(var k=0u;k<${H}u;k++){
-sum+=select(embedding(id,k),0.0,id==0u)*w[${W}u+c*${3 * H}u+k];
-sum+=src[i*${4 * H}u+k*2u+1u]*w[${W + H}u+c*${3 * H}u+k];
-sum+=src[i*${4 * H}u+${2 * H}u+k*2u+1u]*w[${W + 2 * H}u+c*${3 * H}u+k];}
-hidden[i*32u+c]=max(0.0,sum);`);
-  const roles = kernel(`let i=g.x/${R}u;let c=g.x%${R}u;if(i>=p.x*p.y){return;}
-var sum=w[${OB + F}u+c];for(var k=0u;k<32u;k++){sum+=hidden[i*32u+k]*w[${O + F * 32}u+c*32u+k];}
-out[(i/p.y)*${OUTPUT_COUNT}u+${F}u+(i%p.y)*${R}u+c]=select(sum,0.0,token(i)==0u);`);
-  const family = kernel(`let row=g.x/${F}u;let c=g.x%${F}u;if(row>=p.x){return;}
-var total=0.0;var count=0.0;for(var t=0u;t<p.y;t++){let i=row*p.y+t;if(token(i)==0u){continue;}
-var sum=w[${OB}u+c];for(var k=0u;k<32u;k++){sum+=hidden[i*32u+k]*w[${O}u+c*32u+k];}total+=sum;count+=1.0;}
-out[row*${OUTPUT_COUNT}u+c]=total/max(count,1.0);`);
+
+  // Project the embedding and both scan contexts into 32 hidden channels, then ReLU.
+  const project = kernel(`
+  let index = thread.x / 32u;
+  let channel = thread.x % 32u;
+  if (index >= batch.rows * batch.length) { return; }
+  let id = token(index);
+  var sum = weights[${hiddenBias}u + channel];
+  for (var k = 0u; k < ${H}u; k++) {
+    sum += embedding(id, k) * weights[${hiddenWeight}u + channel * ${3 * H}u + k];
+    sum += source[index * ${4 * H}u + k * 2u + 1u]
+      * weights[${hiddenWeight + H}u + channel * ${3 * H}u + k];
+    sum += source[index * ${4 * H}u + ${2 * H}u + k * 2u + 1u]
+      * weights[${hiddenWeight + 2 * H}u + channel * ${3 * H}u + k];
+  }
+  hidden[index * 32u + channel] = max(0.0, sum);
+`);
+
+  const roles = kernel(`
+  let index = thread.x / ${R}u;
+  let channel = thread.x % ${R}u;
+  if (index >= batch.rows * batch.length) { return; }
+  var sum = weights[${outputBias + F}u + channel];
+  for (var k = 0u; k < 32u; k++) {
+    sum += hidden[index * 32u + k] * weights[${outputWeight + F * 32}u + channel * 32u + k];
+  }
+  let row = index / batch.length;
+  let position = index % batch.length;
+  output[row * ${OUTPUT_COUNT}u + ${F}u + position * ${R}u + channel]
+    = select(sum, 0.0, token(index) == 0u);
+`);
+
+  // A schedule's family scores are the mean of its non-padding token scores.
+  const family = kernel(`
+  let row = thread.x / ${F}u;
+  let channel = thread.x % ${F}u;
+  if (row >= batch.rows) { return; }
+  var total = 0.0;
+  var count = 0.0;
+  for (var position = 0u; position < batch.length; position++) {
+    let index = row * batch.length + position;
+    if (token(index) == 0u) { continue; }
+    var sum = weights[${outputBias}u + channel];
+    for (var k = 0u; k < 32u; k++) {
+      sum += hidden[index * 32u + k] * weights[${outputWeight}u + channel * 32u + k];
+    }
+    total += sum;
+    count += 1.0;
+  }
+  output[row * ${OUTPUT_COUNT}u + channel] = total / max(count, 1.0);
+`);
   return [embed, ...scans, project, roles, family];
 }
 
@@ -219,7 +314,7 @@ export class CronModel {
         await this.readback!.mapAsync(GPUMapMode.READ, 0, bytes);
         try {
           output.set(
-            new Float32Array(this.readback!.getMappedRange(0, bytes).slice(0)),
+            new Float32Array(this.readback!.getMappedRange(0, bytes)),
             start * OUTPUT_COUNT,
           );
         } finally {

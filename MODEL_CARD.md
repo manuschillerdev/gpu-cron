@@ -16,7 +16,7 @@ Data version 12 generates structured meanings first. All supported authored mean
 
 Unsupported generator categories stay in training. Their ordinary words retain semantic roles where possible; unresolved restrictions receive unknown labels. Generated development contains supported requests only, so its score says nothing about rejection quality. The separate authored collection supplies ambiguous and unsupported requests.
 
-MLX 0.32.2 uses compiled autodiff, AdamW, clipping, warmup/cosine decay, 8% token embedding dropout and 10% context dropout. The final 12 epochs use deployment-matched six-bit fake quantization. Dropout is disabled at export/inference. The recorded M2 Max loop took 107.5 seconds, including fresh epoch data preparation. Model/optimizer/RNG checkpoints and deterministic epoch seeds support resume. Artifact, source, manifest and fixture hashes are recorded in `training/report.json`.
+MLX 0.32.2 uses compiled autodiff, AdamW, clipping, warmup/cosine decay, 8% token embedding dropout and 10% context dropout. The final 12 epochs use deployment-matched six-bit fake quantization. Dropout is disabled at export/inference. The recorded M2 Max loop took 107.5 seconds, including fresh epoch data preparation. Artifact, source, manifest and fixture hashes are recorded in `training/report.json`.
 
 ## Actual WebGPU evaluation
 
@@ -34,7 +34,7 @@ Regenerated reports in ignored `test-artifacts/evaluation/` bind results to weig
 
 ## Deployment and limitations
 
-Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 62,194 bytes, or **31,898 bytes (31.2 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
+Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 63,922 bytes, or **32,032 bytes (31.3 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
 
 The runtime reuses the device, pipelines, weights and buffers, queues calls and chunks batches at 128. Inputs retain the 512-character limit; training uses a 64-token bucket. Long-input and multilingual generalization are unmeasured. Six-bit quantization and platform differences are checked by comparing the existing quantized MLX fixtures directly with real Chromium WebGPU. No new regression cases were added.
 
@@ -42,7 +42,7 @@ No model loader, WASM payload or runtime dependency ships in the browser.
 
 ## Candidate promotion
 
-Training reads `training/data/*.jsonl` once (or a supplied `--data-dir`), uses the same records each epoch with balanced family sampling, and produces isolated candidate artifacts. Input labels are preserved and validated, and the loaded dataset is snapshotted beside the candidate. Generate the files explicitly with `prepare:cron-data`; checks never regenerate them. Promotion requires fresh WebGPU/MLX parity, the complete-bundle size budget, and the mixed development regression floors in `training/quality.json`. The floors retain the recorded 116/120 authored supported schedules and at most 9/80 false acceptances; they prevent regression and do not claim to solve those remaining failures. Shipped coefficients and fixtures were not regenerated for the pipeline refactor. Original source hashes remain in the reports under `sourceMaintenance`.
+Training reads `training/data/*.jsonl` once (or a supplied `--data-dir`), uses the same records each epoch with balanced family sampling, and produces isolated candidate artifacts. Input labels are preserved and validated, and the loaded dataset is snapshotted beside the candidate. The trainer starts from the fixed seed on each run; checkpoint/resume support is omitted. Generate the files explicitly with `prepare:cron-data`; checks never regenerate them. Promotion requires fresh WebGPU/MLX parity, the complete-bundle size budget, and the mixed development regression floors in `training/quality.json`. The floors retain the recorded 116/120 authored supported schedules and at most 9/80 false acceptances; they prevent regression and do not claim to solve those remaining failures. Shipped coefficients and fixtures were not regenerated for the pipeline refactor. Original source hashes remain in the reports under `sourceMaintenance`.
 
 ## Reproduce
 

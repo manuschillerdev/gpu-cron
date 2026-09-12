@@ -10,7 +10,7 @@ interface Parts {
   minute: number;
 }
 
-export function formatter(timeZone: string): Intl.DateTimeFormat {
+function formatter(timeZone: string): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',

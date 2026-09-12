@@ -142,15 +142,14 @@ def number_word(n):
 
 
 def semantic_labels(item):
-    """Refine existing authored clause annotations; never use model/compiler output.
+    """Turn rendered clause labels into token roles, without model/compiler output.
 
-    Generator records pass through the same deterministic annotation convention.
-    Original clause labels remain recorded to make the migration auditable.
+    Disk records already contain these roles and are loaded without relabelling.
     """
     labels = item["tokens"]
     text = item["text"]
     words = [text[t["start"] : t["end"]].lower() for t in labels]
-    coarse = [t.get("clause", t["role"]) for t in labels]
+    coarse = [t["role"] for t in labels]
     time_indices = [i for i, c in enumerate(coarse) if c == "time"]
     direction = next(
         (i for i in time_indices if words[i] in ("past", "to", "before", "after")), None
@@ -232,13 +231,12 @@ def semantic_labels(item):
             elif i == direction:
                 role = "clock-direction"
             elif i in numbers:
-                role = (
-                    "clock-offset"
-                    if direction is not None and i < direction
-                    else "minute"
-                    if colon is not None and i > colon
-                    else "hour"
-                )
+                if direction is not None and i < direction:
+                    role = "clock-offset"
+                elif colon is not None and i > colon:
+                    role = "minute"
+                else:
+                    role = "hour"
         elif c in ("recurrence", "exclusion"):
             excluded = c == "exclusion"
             day = any(w in (d, d[:3], d + "s") for d in DAYS) or w in (
@@ -313,16 +311,19 @@ def schedule(
     days = sorted(set(weekdays)) if weekdays is not None else None
     if excluded_weekdays:
         days = sorted(set(range(7) if days is None else days) - set(excluded_weekdays))
+    if family == "minutes":
+        minutes = list(range(0, 60, interval))
+        hours = list(range(24))
+    elif family == "hours":
+        minutes = [0]
+        hours = list(range(0, 24, interval))
+    else:
+        minutes = [minute]
+        hours = [hour]
     return {
         "family": family,
-        "minutes": list(range(0, 60, interval))
-        if family == "minutes"
-        else [minute if family != "hours" else 0],
-        "hours": list(range(24))
-        if family == "minutes"
-        else list(range(0, 24, interval))
-        if family == "hours"
-        else [hour],
+        "minutes": minutes,
+        "hours": hours,
         "daysOfMonth": sorted(set(monthdays)) if monthdays is not None else None,
         "weekdays": days,
         "months": sorted(set(months)) if months is not None else list(range(1, 13)),
@@ -342,7 +343,7 @@ def group_id(target):
     ).hexdigest()[:20]
 
 
-def record(parts, family, target, pattern, category, source="generator", identity=None):
+def record(parts, family, target, pattern, category):
     text = "".join(part for part, _ in parts)
     labels = []
     cursor = 0
@@ -363,8 +364,7 @@ def record(parts, family, target, pattern, category, source="generator", identit
     group = group_id(target)
     return semantic_labels(
         {
-            "id": identity
-            or hashlib.sha256((group + "|" + text).encode()).hexdigest()[:20],
+            "id": hashlib.sha256((group + "|" + text).encode()).hexdigest()[:20],
             "groupId": group,
             "text": text,
             "family": family,
@@ -372,7 +372,7 @@ def record(parts, family, target, pattern, category, source="generator", identit
             "target": target,
             "pattern": pattern,
             "category": category,
-            "source": source,
+            "source": "generator",
         }
     )
 
@@ -385,17 +385,9 @@ def row(item):
     )
 
 
-def authored():
-    path = DATA / "authored.jsonl"
-    rows = (
-        [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-        if path.exists()
-        else []
-    )
-    for item in rows:
-        item["groupId"] = group_id(item["target"])
-        semantic_labels(item)
-    return rows
+def read_jsonl(path):
+    """One annotated sample per line; missing source data is an error."""
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
 def meaning(rng, index):
@@ -522,130 +514,133 @@ def spoken_clock(hour, minute, rng):
     )
 
 
+def render_unsupported(m, rng, pattern):
+    """Unsupported requests still teach the roles of their ordinary schedule words."""
+    phrases = {
+        "relative": ["tomorrow at noon", "in five minutes", "next friday"],
+        "event": [
+            "when the server starts",
+            "after deployment",
+            "when the build finishes",
+        ],
+        "vague": ["sometime soon", "after work", "when convenient"],
+        "annual": ["once a year", "every leap year", "annually"],
+        "nth-weekday": [
+            f"every {rng.choice(ORDINALS[1:5])} {rng.choice(DAYS)} of the month at noon",
+            "on the second friday each month",
+            "every last tuesday of the month",
+        ],
+        "bounded": [
+            f"every {rng.choice([5, 10, 15])} minutes between {rng.randrange(1, 12)}am and 5pm",
+            f"daily at {rng.randrange(24)}:00 until friday",
+            "every hour for the next two days",
+            "every friday starting next week",
+        ],
+        "multi-clock": [
+            f"every day at {rng.randrange(1, 12)}am and {rng.randrange(1, 12)}pm",
+            "on monday at noon and friday at midnight",
+        ],
+        "business": [
+            f"every {rng.choice(DAYS)} at noon except holidays",
+            "daily at noon unless the office is closed",
+            "every first business day of the month",
+        ],
+        "timezone": [
+            f"daily at {rng.randrange(24)}:00 {rng.choice(['UTC', 'Europe/Berlin', 'New York time', 'Pacific time'])}"
+        ],
+        "uncertain": [
+            "every few hours should be fine",
+            "weekdays around nine",
+            "daily at eight-ish",
+            "every trading day at noon",
+            "every minus two hours",
+            "weekly at half five",
+        ],
+        "invalid-value": [
+            "every zero minutes",
+            "every 0 hours",
+            "every 25 hours",
+            "daily at 25:00",
+        ],
+        "non-request": [
+            "what does this schedule mean",
+            "please cancel the friday job",
+            "do not run anything",
+            "every day is different",
+            "I might need an hourly job later",
+        ],
+    }
+    if rng.random() < 0.5:
+        phrases[m["kind"]] = ["please " + t for t in phrases[m["kind"]]]
+    kind = m["kind"]
+    if kind == "invalid-value":
+        family = rng.choice(["minutes", "hours", "daily"])
+        parts = (
+            [(f"every {rng.choice([0, 7, 13, 17, 25, 61])} minutes", "recurrence")]
+            if family == "minutes"
+            else [(f"every {rng.choice([0, 5, 7, 25, 48])} hours", "recurrence")]
+            if family == "hours"
+            else [
+                ("daily ", "recurrence"),
+                (f"at {rng.choice([25, 26, 30])}:00", "time"),
+            ]
+        )
+        return record(parts, family, m["target"], pattern, kind)
+    if kind == "nth-weekday":
+        return record(
+            [
+                (
+                    rng.choice(["every ", "on the ", "each month on the "]),
+                    "recurrence",
+                ),
+                (rng.choice(ORDINALS[1:5] + ["last"]) + " ", "recurrence"),
+                (rng.choice(DAYS) + " ", "recurrence"),
+                (
+                    rng.choice(["of the month ", "of each month ", "in every month "]),
+                    "recurrence",
+                ),
+                (f"at {rng.randrange(24):02d}:00", "time"),
+            ],
+            "monthly",
+            m["target"],
+            pattern,
+            kind,
+        )
+    if kind in ("business", "bounded", "timezone", "multi-clock"):
+        hour = rng.randrange(24)
+        endings = {
+            "business": ["except public holidays", "unless the office is closed"],
+            "bounded": [
+                "until friday",
+                "starting next week",
+                "for the next five occurrences",
+                "for thirty days",
+            ],
+            "timezone": ["UTC", "Europe/Berlin", "Pacific time"],
+            "multi-clock": [f"and {rng.randrange(1, 12)}pm"],
+        }
+        item = record(
+            [
+                (rng.choice(["daily ", "every day ", "each day "]), "recurrence"),
+                (f"at {hour:02d}:00 ", "time"),
+                (rng.choice(endings[kind]), "unknown"),
+            ],
+            "daily",
+            m["target"],
+            pattern,
+            kind,
+        )
+        return item
+    return record(
+        [(rng.choice(phrases[kind]), "unknown")], "invalid", m["target"], pattern, kind
+    )
+
+
 def render(m, rng, pattern):
     """Composable surface forms, all drawn from a fixed structured meaning."""
     f = m["family"]
     if f == "invalid":
-        phrases = {
-            "relative": ["tomorrow at noon", "in five minutes", "next friday"],
-            "event": [
-                "when the server starts",
-                "after deployment",
-                "when the build finishes",
-            ],
-            "vague": ["sometime soon", "after work", "when convenient"],
-            "annual": ["once a year", "every leap year", "annually"],
-            "nth-weekday": [
-                f"every {rng.choice(ORDINALS[1:5])} {rng.choice(DAYS)} of the month at noon",
-                "on the second friday each month",
-                "every last tuesday of the month",
-            ],
-            "bounded": [
-                f"every {rng.choice([5, 10, 15])} minutes between {rng.randrange(1, 12)}am and 5pm",
-                f"daily at {rng.randrange(24)}:00 until friday",
-                "every hour for the next two days",
-                "every friday starting next week",
-            ],
-            "multi-clock": [
-                f"every day at {rng.randrange(1, 12)}am and {rng.randrange(1, 12)}pm",
-                "on monday at noon and friday at midnight",
-            ],
-            "business": [
-                f"every {rng.choice(DAYS)} at noon except holidays",
-                "daily at noon unless the office is closed",
-                "every first business day of the month",
-            ],
-            "timezone": [
-                f"daily at {rng.randrange(24)}:00 {rng.choice(['UTC', 'Europe/Berlin', 'New York time', 'Pacific time'])}"
-            ],
-            "uncertain": [
-                "every few hours should be fine",
-                "weekdays around nine",
-                "daily at eight-ish",
-                "every trading day at noon",
-                "every minus two hours",
-                "weekly at half five",
-            ],
-            "invalid-value": [
-                "every zero minutes",
-                "every 0 hours",
-                "every 25 hours",
-                "daily at 25:00",
-            ],
-            "non-request": [
-                "what does this schedule mean",
-                "please cancel the friday job",
-                "do not run anything",
-                "every day is different",
-                "I might need an hourly job later",
-            ],
-        }
-        if rng.random() < 0.5:
-            phrases[m["kind"]] = ["please " + t for t in phrases[m["kind"]]]
-        kind = m["kind"]
-        if kind == "invalid-value":
-            family = rng.choice(["minutes", "hours", "daily"])
-            parts = (
-                [(f"every {rng.choice([0, 7, 13, 17, 25, 61])} minutes", "recurrence")]
-                if family == "minutes"
-                else [(f"every {rng.choice([0, 5, 7, 25, 48])} hours", "recurrence")]
-                if family == "hours"
-                else [
-                    ("daily ", "recurrence"),
-                    (f"at {rng.choice([25, 26, 30])}:00", "time"),
-                ]
-            )
-            return record(parts, family, m["target"], pattern, kind)
-        if kind == "nth-weekday":
-            return record(
-                [
-                    (
-                        rng.choice(["every ", "on the ", "each month on the "]),
-                        "recurrence",
-                    ),
-                    (rng.choice(ORDINALS[1:5] + ["last"]) + " ", "recurrence"),
-                    (rng.choice(DAYS) + " ", "recurrence"),
-                    (
-                        rng.choice(
-                            ["of the month ", "of each month ", "in every month "]
-                        ),
-                        "recurrence",
-                    ),
-                    (f"at {rng.randrange(24):02d}:00", "time"),
-                ],
-                "monthly",
-                m["target"],
-                pattern,
-                kind,
-            )
-        if kind in ("business", "bounded", "timezone", "multi-clock"):
-            hour = rng.randrange(24)
-            endings = {
-                "business": ["except public holidays", "unless the office is closed"],
-                "bounded": [
-                    "until friday",
-                    "starting next week",
-                    "for the next five occurrences",
-                    "for thirty days",
-                ],
-                "timezone": ["UTC", "Europe/Berlin", "Pacific time"],
-                "multi-clock": [f"and {rng.randrange(1, 12)}pm"],
-            }
-            item = record(
-                [
-                    (rng.choice(["daily ", "every day ", "each day "]), "recurrence"),
-                    (f"at {hour:02d}:00 ", "time"),
-                    (rng.choice(endings[kind]), "unknown"),
-                ],
-                "daily",
-                m["target"],
-                pattern,
-                kind,
-            )
-            return item
-        return record(
-            [(rng.choice(phrases[kind]), "unknown")], f, m["target"], pattern, kind
-        )
+        return render_unsupported(m, rng, pattern)
     n = m["interval"]
     word = NUMBERS[n] if n < len(NUMBERS) and rng.random() < 0.3 else str(n)
     if f in ("minutes", "hours"):
@@ -903,7 +898,7 @@ def render(m, rng, pattern):
 
 
 def datasets():
-    independent = authored()
+    independent = read_jsonl(DATA / "authored.jsonl")
     reserved = {r["groupId"] for r in independent}
     result = {
         "train": [],
@@ -939,7 +934,7 @@ def datasets():
             and m["minute"] == 0
         ):
             patterns.append("bare-clock")
-        # Whole held-out surface construction: exclusion introduced by "but not".
+        # This development stress set focuses on exclusions introduced by "but not".
         if split == "patternHoldout" and (
             m["family"] == "invalid" or not (m["excluded_days"] or m["excluded_months"])
         ):
@@ -956,10 +951,7 @@ def datasets():
             result[split].append(item)
     # A small curated supplement; no teacher/import pipeline is needed.
     present = {r["id"] for r in result["train"]}
-    for line in (DATA / "curated.jsonl").read_text().splitlines():
-        if not line.strip():
-            continue
-        item = semantic_labels(json.loads(line))
+    for item in read_jsonl(DATA / "curated.jsonl"):
         group = group_id(item["target"])
         if (
             group != item["groupId"]

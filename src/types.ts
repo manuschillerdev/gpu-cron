@@ -4,7 +4,6 @@ export interface Diagnostic {
   code:
     | 'invalid-input'
     | 'unsupported-syntax'
-    | 'low-confidence'
     | 'invalid-value'
     | 'not-cron'
     | 'assumption'
