@@ -69,7 +69,7 @@ Model inference requires WebGPU. Unsupported browsers and device errors produce 
 
 Cron weights are embedded as packed signed six-bit values and expanded to float32 once during initialization. The runtime creates specialized WGSL pipelines for the fixed network, uploads weights once, and reuses input/intermediate/readback buffers, growing them when a larger batch arrives. Each instance queues calls to keep buffer reuse safe. No general model loader, operator library, WASM payload, or runtime dependency is shipped. See [MODEL_CARD.md](MODEL_CARD.md).
 
-`pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **31.6 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
+`pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **30.8 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
 
 ## Supported language
 
@@ -129,9 +129,9 @@ The candidate gate checks exact schedules and unsupported/ambiguous rejection ag
 
 The network sums learned 24-dimensional word-hash, consonant-hash and shape embeddings, runs bidirectional affine scans, and predicts 16 semantic roles plus seven family scores. It has no word-vocabulary lookup or shared unknown-word ID. All inference operators are specialized WGSL, independent of the training framework.
 
-The recorded M2 Max run took 107.5 seconds for 45 epochs using the earlier pipeline. New runs use the fixed JSONL corpus. Each run starts from the same seed; the trainer has no checkpoint/resume protocol. Training writes a candidate that must pass the WebGPU, semantic-quality, and size checks before promotion.
+The recorded M2 Max run took 14.3 seconds for 60 epochs over the fixed JSONL corpus. Each run starts from the same seed; the trainer has no checkpoint/resume protocol. Training writes a candidate that must pass the WebGPU, semantic-quality, and size checks before promotion.
 
-**Known limits:** the shipped model produces 116/120 exact authored schedules and incorrectly accepts 9/80 unsupported or ambiguous requests. See [MODEL_CARD.md](MODEL_CARD.md) for the complete measurements and architecture.
+**Known limits:** the shipped model produces 117/120 exact authored schedules and incorrectly accepts 5/80 unsupported or ambiguous requests. See [MODEL_CARD.md](MODEL_CARD.md) for the complete measurements and architecture.
 
 Each JSONL line is one annotated object: `text`, `family`, canonical `groupId`, token offsets and semantic roles, structured `target`, and source/provenance. `clause` retains the original coarse annotation; `annotationVersion: 2` identifies semantic-role refinement. The generator assigns meanings to disjoint splits before rendering, so paraphrases stay together. `authored.jsonl` and `curated.jsonl` are versioned source data; the larger generated splits are reproducible and ignored.
 

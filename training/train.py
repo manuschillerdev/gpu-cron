@@ -301,7 +301,7 @@ def fit(sets, epochs):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=45)
+    parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument(
         "--data-dir",
         type=Path,
