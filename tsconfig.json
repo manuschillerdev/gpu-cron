@@ -6,10 +6,11 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "lib": ["ES2022", "DOM"],
-    "types": ["@webgpu/types", "vite/client"],
+    "types": ["@webgpu/types", "vite/client", "node"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "demo"]
+  "include": ["src", "demo", "test"]
 }

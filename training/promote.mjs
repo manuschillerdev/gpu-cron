@@ -4,7 +4,7 @@ import { copyFile } from 'node:fs/promises';
 
 for (const args of [
   ['training/evaluate.mjs', '--candidate', '--check'],
-  ['test/size.mjs', '--candidate'],
+  ['test/size.ts', '--candidate'],
 ]) {
   const result = spawnSync(process.execPath, args, { stdio: 'inherit' });
   if (result.error) throw result.error;

@@ -31,6 +31,7 @@ const bundle = await build({
     },
   },
 });
+if ('on' in bundle) throw new Error('Size verification requires a completed build, not a watcher.');
 const output = (Array.isArray(bundle) ? bundle : [bundle]).flatMap((r) => r.output);
 const chunks = output.filter((f) => f.type === 'chunk');
 if (

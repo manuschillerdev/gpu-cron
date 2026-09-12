@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^22.20.2
+        version: 22.20.2
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260707.2
         version: 7.0.0-dev.20260707.2
@@ -652,7 +655,6 @@ snapshots:
   '@types/node@22.20.2':
     dependencies:
       undici-types: 6.21.0
-    optional: true
 
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260707.2':
     optional: true
@@ -782,8 +784,7 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
 
-  undici-types@6.21.0:
-    optional: true
+  undici-types@6.21.0: {}
 
   vite@7.3.6(@types/node@22.20.2):
     dependencies:

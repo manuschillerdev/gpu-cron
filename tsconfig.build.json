@@ -4,7 +4,9 @@
     "noEmit": false,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "allowImportingTsExtensions": false,
+    "types": ["@webgpu/types"]
   },
   "include": ["src"]
 }

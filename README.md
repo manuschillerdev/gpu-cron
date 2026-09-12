@@ -27,7 +27,7 @@ pnpm run size           # bundled/minified/Brotli bytes; 40,000-byte budget
 pnpm run check          # all library and browser checks
 ```
 
-The build uses the [Go-based TypeScript 7 compiler](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-rc/) (`tsgo`), pinned in the pnpm lockfile. Python checks use Ruff, ty, and pytest; currently there are no Python tests to collect. The existing JavaScript and browser suites remain the regression tests.
+The build uses the [Go-based TypeScript 7 compiler](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-rc/) (`tsgo`), pinned in the pnpm lockfile. Python checks use Ruff, ty, and pytest; currently there are no Python tests to collect. The TypeScript tests and browser checks are included in strict type-checking. Node runs the test files using its built-in type stripping.
 
 Use `mise run check` for the complete suite or `mise run build` for the library and demo. With mise activated in your shell, the pnpm/uv commands below use the pinned tools; otherwise prefix them with `mise exec --`. `mise run setup` installs from both lockfiles without updating them. Python selection follows the mise `UV_PYTHON` setting.
 
@@ -159,12 +159,14 @@ training/               Complete offline model pipeline
   quality.json          Semantic regression floors
   report.json           Shipped model provenance
 test/                   Verification only; nothing ships in the library
-  *.test.mjs            Node parsing, calendar, and model checks
-  browser.mjs           Real WebGPU and demo checks
-  reference.mjs         Numerical reference for verification
+  *.test.ts            Node parsing, calendar, and model checks
+  browser.ts           Real WebGPU and demo checks
+  reference.ts         Numerical reference for verification
   model-fixtures.json   Quantized MLX reference outputs
-  size.mjs              Complete browser-library size budget
+  size.ts              Complete browser-library size budget
 ```
+
+`tsconfig.json` checks `src/`, `demo/`, and `test/`. `tsconfig.build.json` emits only `src/` into `dist/`; tests import that built output and its declarations. The test and type-check commands build it first, including on a fresh checkout.
 
 The root `index.html` is Vite's conventional demo entry. Tool configuration and lockfiles stay beside their package manifests. `dist/`, `site/`, `training/candidate/`, and `test-artifacts/` are generated and ignored.
 

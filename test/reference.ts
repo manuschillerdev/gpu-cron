@@ -4,7 +4,11 @@ import { FEATURE_COUNT, HIDDEN_COUNT, ROLES, featureRows } from '../dist/feature
 const w = decodeWeights(),
   H = HIDDEN_COUNT,
   R = ROLES.length;
-const at = (name) => SEGMENTS.find((s) => s.name === name).offset;
+const at = (name: string) => {
+  const segment = SEGMENTS.find((s) => s.name === name);
+  if (!segment) throw new Error('Missing model tensor: ' + name);
+  return segment.offset;
+};
 const E = at('embedding.weight'),
   A = at('affine.weight'),
   AB = at('affine.bias'),
@@ -12,12 +16,12 @@ const E = at('embedding.weight'),
   WB = at('hidden.bias'),
   O = at('output.weight'),
   OB = at('output.bias');
-function embedding(id, k) {
+function embedding(id: number, k: number) {
   return id
-    ? Math.fround(featureRows(id).reduce((s, r) => s + w[E + r * H + k], 0) / Math.sqrt(3))
+    ? Math.fround(featureRows(id).reduce((s, r) => s + w[E + r * H + k]!, 0) / Math.sqrt(3))
     : 0;
 }
-export function cpuLogits(input) {
+export function cpuLogits(input: Float32Array) {
   if (input.length % FEATURE_COUNT) throw new Error('Invalid model input shape.');
   const output = new Float32Array((input.length / FEATURE_COUNT) * OUTPUT_COUNT);
   for (let row = 0; row < input.length / FEATURE_COUNT; row++) {
@@ -31,12 +35,12 @@ export function cpuLogits(input) {
       r = new Float32Array(n * H);
     for (let t = 0; t < n; t++)
       for (let c = 0; c < H; c++) {
-        let ga = w[AB + c],
-          gb = w[AB + H + c];
+        let ga = w[AB + c]!,
+          gb = w[AB + H + c]!;
         for (let k = 0; k < H; k++) {
-          const e = embedding(ids[t], k);
-          ga += e * w[A + c * H + k];
-          gb += e * w[A + (c + H) * H + k];
+          const e = embedding(ids[t]!, k);
+          ga += e * w[A + c * H + k]!;
+          gb += e * w[A + (c + H) * H + k]!;
         }
         a[t * H + c] = 1 / (1 + Math.exp(-ga));
         b[t * H + c] = Math.tanh(gb);
@@ -45,10 +49,10 @@ export function cpuLogits(input) {
       let left = 0,
         right = 0;
       for (let t = 0; t < n; t++) {
-        left = a[t * H + c] * left + b[t * H + c];
+        left = a[t * H + c]! * left + b[t * H + c]!;
         f[t * H + c] = left;
         const j = n - 1 - t;
-        right = a[j * H + c] * right + b[j * H + c];
+        right = a[j * H + c]! * right + b[j * H + c]!;
         r[j * H + c] = right;
       }
     }
@@ -56,22 +60,22 @@ export function cpuLogits(input) {
       family = new Float64Array(7);
     for (let t = 0; t < n; t++) {
       for (let c = 0; c < 32; c++) {
-        let sum = w[WB + c];
+        let sum = w[WB + c]!;
         for (let k = 0; k < H; k++) {
-          sum += embedding(ids[t], k) * w[W + c * 3 * H + k];
-          sum += f[t * H + k] * w[W + c * 3 * H + H + k];
-          sum += r[t * H + k] * w[W + c * 3 * H + 2 * H + k];
+          sum += embedding(ids[t]!, k) * w[W + c * 3 * H + k]!;
+          sum += f[t * H + k]! * w[W + c * 3 * H + H + k]!;
+          sum += r[t * H + k]! * w[W + c * 3 * H + 2 * H + k]!;
         }
         hidden[c] = Math.max(0, sum);
       }
       for (let c = 0; c < 7 + R; c++) {
-        let sum = w[OB + c];
-        for (let k = 0; k < 32; k++) sum += hidden[k] * w[O + c * 32 + k];
-        if (c < 7) family[c] += sum;
+        let sum = w[OB + c]!;
+        for (let k = 0; k < 32; k++) sum += hidden[k]! * w[O + c * 32 + k]!;
+        if (c < 7) family[c] = family[c]! + sum;
         else output[row * OUTPUT_COUNT + 7 + t * R + c - 7] = sum;
       }
     }
-    for (let c = 0; c < 7; c++) output[row * OUTPUT_COUNT + c] = family[c] / n;
+    for (let c = 0; c < 7; c++) output[row * OUTPUT_COUNT + c] = family[c]! / n;
   }
   return output;
 }
