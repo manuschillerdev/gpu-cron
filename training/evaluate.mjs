@@ -159,27 +159,20 @@ try {
                     ? 'compiler'
                     : 'model-and-compiler';
             results.push({
-              id: gold.id,
               groupId: gold.groupId,
-              category: gold.category,
-              text: gold.text,
-              target: gold.target,
+              status: gold.target.status,
               network: {
                 familyCorrect,
                 spansCorrect,
                 tokenCorrect,
                 tokenTotal: gold.tokens.length,
-                prediction: pred.model,
               },
               compiler: {
                 exact,
-                schedule: pred.schedule,
-                diagnostics: pred.diagnostics,
+                accepted: pred.schedule !== null,
               },
               oracleCompiler: {
                 exact: oracleExact,
-                schedule: oracle.schedule,
-                diagnostics: oracle.diagnostics,
               },
               failure,
             });
@@ -193,9 +186,9 @@ try {
     const summarize = (rows) => {
       const count = rows.length;
       const ratio = (n) => (count ? n / count : null);
-      const supported = rows.filter((r) => r.target.status === 'supported');
-      const ambiguous = rows.filter((r) => r.target.status === 'ambiguous');
-      const unsupported = rows.filter((r) => r.target.status === 'unsupported');
+      const supported = rows.filter((r) => r.status === 'supported');
+      const ambiguous = rows.filter((r) => r.status === 'ambiguous');
+      const unsupported = rows.filter((r) => r.status === 'unsupported');
       const tokenTotal = rows.reduce((sum, r) => sum + r.network.tokenTotal, 0);
       return {
         examples: count,
@@ -215,11 +208,11 @@ try {
           correctOutcomeRate: ratio(rows.filter((r) => r.compiler.exact).length),
           unsupportedExamples: unsupported.length,
           unsupportedRejectionRate: unsupported.length
-            ? unsupported.filter((r) => !r.compiler.schedule).length / unsupported.length
+            ? unsupported.filter((r) => !r.compiler.accepted).length / unsupported.length
             : null,
           ambiguousExamples: ambiguous.length,
           ambiguousRejectionRate: ambiguous.length
-            ? ambiguous.filter((r) => !r.compiler.schedule).length / ambiguous.length
+            ? ambiguous.filter((r) => !r.compiler.accepted).length / ambiguous.length
             : null,
         },
         oracleCompiler: {
@@ -237,11 +230,9 @@ try {
     const summary = summarize(outcomes);
     if (check) {
       const floor = quality.splits[name];
-      const exact = outcomes.filter(
-        (r) => r.target.status === 'supported' && r.compiler.exact,
-      ).length;
+      const exact = outcomes.filter((r) => r.status === 'supported' && r.compiler.exact).length;
       const accepted = (status) =>
-        outcomes.filter((r) => r.target.status === status && r.compiler.schedule).length;
+        outcomes.filter((r) => r.status === status && r.compiler.accepted).length;
       if (sha(bytes) !== floor.sourceSha256 || outcomes.length !== floor.examples)
         failures.push(
           name + ': evaluation collection changed; review its quality floor explicitly',
