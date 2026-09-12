@@ -1,0 +1,26 @@
+{
+  "note": "Development regression floors, not a claim of robust generalization. Lower false-acceptance ceilings as rejection improves.",
+  "splits": {
+    "development": {
+      "sourceSha256": "77a9f636bf6ddf77b5d59eecd20f10c8d6c1da66d1722189afb01906cf7618e2",
+      "examples": 2661,
+      "minExactSchedules": 2652,
+      "maxUnsupportedAccepted": 0,
+      "maxAmbiguousAccepted": 0
+    },
+    "patternHoldout": {
+      "sourceSha256": "ca01ab785d7a7b573bc899124b3777ac18e1bca8d19a6f19a70cdb69e6bb3f7e",
+      "examples": 489,
+      "minExactSchedules": 488,
+      "maxUnsupportedAccepted": 0,
+      "maxAmbiguousAccepted": 0
+    },
+    "authoredHoldout": {
+      "sourceSha256": "32d586b0cff5fd7372a2caf6713aaee1cb1e80c546875af716c13b734e3932cc",
+      "examples": 200,
+      "minExactSchedules": 117,
+      "maxUnsupportedAccepted": 4,
+      "maxAmbiguousAccepted": 1
+    }
+  }
+}

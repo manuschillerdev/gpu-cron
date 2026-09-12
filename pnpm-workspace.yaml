@@ -1,6 +1,3 @@
 # esbuild's platform binary is required by Vite. No other dependency needs an install script.
 onlyBuiltDependencies:
   - esbuild
-
-ignoredBuiltDependencies:
-  - protobufjs

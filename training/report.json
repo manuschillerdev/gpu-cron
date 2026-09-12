@@ -3,67 +3,20 @@
   "framework": "mlx",
   "frameworkVersion": "0.32.2",
   "device": "gpu",
-  "deviceInfo": {
-    "device_name": "Apple M2 Max",
-    "max_recommended_working_set_size": 55662788608,
-    "memory_size": 68719476736,
-    "architecture": "applegpu_g14s",
-    "max_buffer_length": 41747087360,
-    "resource_limit": 499000
-  },
-  "compiled": true,
+  "deviceName": "Apple M2 Max",
   "architecture": "feature-sum-bidirectional-affine-scan",
   "parameters": 35783,
   "packedWeightBytes": 26838,
   "quantization": "signed six-bit per tensor, final 12 epochs deployment-matched fake quantization",
-  "epochs": 45,
+  "epochs": 60,
   "batchSize": 256,
-  "sampling": "Fresh phrasings every epoch; uniform family sampling from fixed training-only meaning groups",
-  "regularization": "8% token embedding dropout and 10% bidirectional context dropout during training only",
   "trainingExamples": 23177,
-  "trainingSeconds": 107.45288179203635,
-  "dataVersion": 12,
-  "vocabularySize": 324,
-  "vocabularySha256": "11e7cc462acfe829751c5be8ddf046e25bafd5c015f91c6af7e2dc6355a5d38c",
-  "dataSourceSha256": "47d9732dd2878fda5948531ee2566aea947fbcb0402ce7c697d921843b3c0615",
-  "trainingSourceSha256": "e068d7621ac72b4c4a772b28b65d9b72d8322376aaf45ab4af4e561fc0818daf",
-  "weightsSha256": "d24912a65af2708ddcbdf60c2657e171a4f76bad887aeb126b1d74928bb78f41",
-  "fixturesSha256": "9c8ffefe49e25fb3ffc8d4278552c62945809751efce4717028e89a2029947c3",
-  "validation": {
-    "correct": 2658,
-    "total": 2661,
-    "familyAccuracy": 0.9988726042841037,
-    "exactFamilyAndSpans": 0.9954904171364148,
-    "tokenAccuracy": 0.999779660187044
-  },
-  "holdouts": {
-    "status": "not evaluated by trainer",
-    "command": "pnpm run evaluate:cron:holdout",
-    "splits": {
-      "train": {
-        "examples": 23177,
-        "meaningGroups": 6819,
-        "sha256": "6d20250bba9c4cf3626796ad6928ce1944fbae9185c153a5df391ef9982d7f36"
-      },
-      "development": {
-        "examples": 2661,
-        "meaningGroups": 830,
-        "sha256": "2e38514e2d7b5937e68e158ff369d061a4f0eaef87ae703fdea4f0b66ba835e6"
-      },
-      "patternHoldout": {
-        "examples": 489,
-        "meaningGroups": 489,
-        "sha256": "248bf86e7e838d42d0f3569a4c5936524fa2ae9411d81d4dd630452dc513b4ef"
-      },
-      "authoredHoldout": {
-        "examples": 200,
-        "meaningGroups": 139,
-        "sha256": "355742c7a05cdd1e478a202b4d23eae9b1a9ceeb7d616a0f4d805c9947651153"
-      }
-    }
-  },
-  "split": "Canonical structured meaning before rendering; authored meanings reserved from generated splits.",
-  "manifestSha256": "1668266fe34e145e05995135c7fe27ca86848f4c6ca07d6fa8b41afc16a75103",
-  "limitation": "Family plus token-span metrics are not end-to-end schedule accuracy. The typed compiler still interprets values and checks schedule semantics. Real-user accuracy is unmeasured.",
-  "totalSeconds": 110.43997570802458
+  "trainingSeconds": 14.322475500055589,
+  "dataVersion": 13,
+  "dataSourceSha256": "15b433a3b839b2545363b495e82793c56effe74592bd6b439530fbace3e9307c",
+  "trainingSourceSha256": "5a56ca130d60d62e436a2930a43877fd0ccf2bffb6727a1ae5492a4ad7e9d8c8",
+  "weightsSha256": "89a895ccd060480bfdadf5edae18eecabd2b65e3a4d7c179297cfe5231a84e1a",
+  "fixturesSha256": "cac03e932981b1e385054b16b0d5618730c9d45c0f028979c5bfd7d8aa771317",
+  "manifestSha256": "fde44124a4a6857252c925f6d611d7d97e514482630b40f5cca7f4f71120219b",
+  "totalSeconds": 16.517714583023917
 }

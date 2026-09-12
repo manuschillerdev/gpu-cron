@@ -1,9 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
-    "strict": true, "noUncheckedIndexedAccess": true,
-    "lib": ["ES2022", "DOM"], "types": ["@webgpu/types"],
-    "resolveJsonModule": true, "skipLibCheck": true, "noEmit": true
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "lib": ["ES2022", "DOM"],
+    "types": ["@webgpu/types", "vite/client", "node"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src", "demo"]
+  "include": ["src", "demo", "test"]
 }
