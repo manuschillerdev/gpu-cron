@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { createServer, preview } from 'vite';
 import { chromium, type Browser, type Page } from 'playwright';
 import fixtures from './model-fixtures.json' with { type: 'json' };
@@ -117,14 +117,10 @@ try {
   assert.equal(await page.locator('#occurrences li').count(), 0);
   await page.click('[data-example="Every weekday at 9:30am"]');
   await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('#copy')!.disabled);
-  await mkdir('test-artifacts', { recursive: true });
-  await page.screenshot({ path: 'test-artifacts/demo-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  await page.screenshot({ path: 'test-artifacts/demo-mobile.png', fullPage: true });
   assert.deepEqual(errors, []);
   await checkProduction(browser);
-  await writeFile('test-artifacts/browser-report.json', JSON.stringify(parity, null, 2) + '\n');
   console.log('Real Chromium WebGPU parity and desktop/mobile demo checks passed:', parity);
 } finally {
   await browser?.close();

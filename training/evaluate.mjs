@@ -1,5 +1,5 @@
 /** Dataset evaluation, separate from regression tests. Inference is actual WebGPU. */
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createServer } from 'vite';
@@ -15,7 +15,6 @@ const names = check
 const directory = candidate ? 'training/candidate' : 'training';
 const dataDirectory = directory + '/data';
 const weightsPath = candidate ? directory + '/weights.json' : 'src/model/weights.json';
-const reportDirectory = candidate ? directory + '/evaluation' : 'test-artifacts/evaluation';
 const quality = JSON.parse(await readFile('training/quality.json', 'utf8'));
 const failures = [];
 const server = await createServer({
@@ -236,27 +235,6 @@ try {
       };
     };
     const summary = summarize(outcomes);
-    const report = {
-      split: name,
-      sourceSha256: sha(bytes),
-      compilerSha256: sha(await readFile('src/compile.ts')),
-      featuresSha256: sha(await readFile('src/features.ts')),
-      runtimeSha256: sha(await readFile('src/model/runtime.ts')),
-      weightsSha256: sha(await readFile(weightsPath)),
-      manifestSha256: sha(await readFile(dataDirectory + '/manifest.json')),
-      evaluationUse: 'Development regression benchmark; see MODEL_CARD.md.',
-      annotationVersion: 2,
-      executionProvider: 'webgpu',
-      context: { timeZone: 'UTC', reference: '2026-09-14T00:00:00Z' },
-      ...summary,
-      byCategory: Object.fromEntries(
-        [...new Set(outcomes.map((r) => r.category))]
-          .sort()
-          .map((c) => [c, summarize(outcomes.filter((r) => r.category === c))]),
-      ),
-    };
-    await mkdir(reportDirectory, { recursive: true });
-    await writeFile(reportDirectory + '/' + name + '.json', JSON.stringify(report, null, 2) + '\n');
     if (check) {
       const floor = quality.splits[name];
       const exact = outcomes.filter(
@@ -264,7 +242,7 @@ try {
       ).length;
       const accepted = (status) =>
         outcomes.filter((r) => r.target.status === status && r.compiler.schedule).length;
-      if (report.sourceSha256 !== floor.sourceSha256 || outcomes.length !== floor.examples)
+      if (sha(bytes) !== floor.sourceSha256 || outcomes.length !== floor.examples)
         failures.push(
           name + ': evaluation collection changed; review its quality floor explicitly',
         );
@@ -275,11 +253,6 @@ try {
       if (accepted('ambiguous') > floor.maxAmbiguousAccepted)
         failures.push(name + ': ambiguous acceptance regressed');
     }
-    await mkdir('test-artifacts', { recursive: true });
-    await writeFile(
-      `test-artifacts/cron-${name}-predictions.json`,
-      JSON.stringify(outcomes, null, 2) + '\n',
-    );
     reports[name] = summary;
   }
   console.log(JSON.stringify(reports, null, 2));

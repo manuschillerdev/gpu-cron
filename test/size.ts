@@ -1,6 +1,5 @@
 import { build } from 'vite';
 import { brotliCompressSync } from 'node:zlib';
-import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 const candidate = process.argv.includes('--candidate');
 const budget = 40000;
@@ -50,11 +49,6 @@ const report = {
 if (report.brotliBytes > budget)
   throw new Error(`cron exceeds its complete-bundle budget: ${JSON.stringify(report)}`);
 const reports = { cron: report };
-await mkdir('test-artifacts', { recursive: true });
-await writeFile(
-  candidate ? 'test-artifacts/candidate-bundle-sizes.json' : 'test-artifacts/bundle-sizes.json',
-  JSON.stringify(reports, null, 2) + '\n',
-);
 console.log(
   JSON.stringify(
     {

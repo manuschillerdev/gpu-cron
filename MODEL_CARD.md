@@ -30,7 +30,7 @@ The original model produced **23/120** exact authored schedules; the current mod
 
 These are **development measurements**, not untouched or real-user accuracy. Earlier results informed this iteration. “But not” is now taught, and the generated collection changed, so its current result is not an unseen-construction result. Authored texts were assistant-written separately from the generator. Original clause annotations remain under `clause`; deterministic semantic-role refinement uses neither network nor compiler output. Token accuracy cannot be directly compared with the old five-label task. The trainer does not fit authored requests, but a fresh independent collection is needed for a new generalization claim.
 
-Regenerated reports in ignored `test-artifacts/evaluation/` bind results to weights, dataset, feature encoder, compiler and WGSL hashes. Full predictions and diagnostics live in ignored `test-artifacts/cron-*-predictions.json`. Evaluation separates network output, actual compiler results and compiler results with annotated roles.
+Evaluation prints network metrics, actual compiler results, and compiler results with annotated roles separately. Model/data identity and quality floors are checked directly; no evaluation reports are saved.
 
 ## Deployment and limitations
 

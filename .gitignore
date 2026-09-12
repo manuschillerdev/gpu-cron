@@ -9,7 +9,6 @@ training/__pycache__/
 training/data/train.jsonl
 training/data/development.jsonl
 training/data/patternHoldout.jsonl
-test-artifacts/
 .DS_Store
 .idea/
 .vscode/

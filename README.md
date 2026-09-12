@@ -137,7 +137,7 @@ Each JSONL line is one annotated object: `text`, `family`, canonical `groupId`, 
 
 Inspect or edit `training/data/train.jsonl` before training. Labels are read as stored, with token-offset, role, family, and split-leakage validation. `--data-dir PATH` selects another directory containing `train.jsonl`, `development.jsonl`, `patternHoldout.jsonl`, and `authored.jsonl`. Training snapshots the loaded records under `training/candidate/data/` so evaluation uses the same data. Checks and evaluation never regenerate these inputs. Rerunning `prepare:cron-data` intentionally replaces generated data, so keep any curated edits elsewhere first.
 
-The trainer fits and exports; `evaluate.mjs` computes quality metrics using actual WebGPU inference. Evaluation reports go to ignored `test-artifacts/evaluation/`. Candidate reports stay alongside the candidate. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source and manifest hashes identify the maintained pipeline without implying that unchanged weights were retrained. Generator version 13 removes unused templates; its training wording differs from the shipped model’s historical corpus, while evaluation examples and split meanings are unchanged.
+The trainer fits and exports; `evaluate.mjs` computes quality metrics using actual WebGPU inference. Checks print their summaries to the console without saving reports or screenshots. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source and manifest hashes identify the maintained pipeline without implying that unchanged weights were retrained. Generator version 13 removes unused templates; its training wording differs from the shipped model’s historical corpus, while evaluation examples and split meanings are unchanged.
 
 ## Source map
 
@@ -168,7 +168,7 @@ test/                   Verification only; nothing ships in the library
 
 `tsconfig.json` checks `src/`, `demo/`, and `test/`. `tsconfig.build.json` emits only `src/` into `dist/`; tests import that built output and its declarations. The test and type-check commands build it first, including on a fresh checkout.
 
-The root `index.html` is Vite's conventional demo entry. Tool configuration and lockfiles stay beside their package manifests. `dist/`, `site/`, `training/candidate/`, and `test-artifacts/` are generated and ignored.
+The root `index.html` is Vite's conventional demo entry. Tool configuration and lockfiles stay beside their package manifests. `dist/`, `site/`, and `training/candidate/` are generated and ignored.
 
 The cron contract follows the [crontab manual](https://man7.org/linux/man-pages/man5/crontab.5.html), particularly field-step resets and the OR relationship between restricted day fields. Browser inference uses WebGPU directly, verified against MLX fixtures.
 
