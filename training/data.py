@@ -910,7 +910,7 @@ def render(m, rng, pattern):
     )
 
 
-def datasets(epoch=0):
+def datasets():
     independent = authored()
     reserved = {r["groupId"] for r in independent}
     result = {
@@ -920,7 +920,7 @@ def datasets(epoch=0):
         "authoredHoldout": independent,
     }
     rng = random.Random(SEED)
-    surface = random.Random(SEED + epoch * 1009)
+    surface = random.Random(SEED)
     seen = set()
     for i in range(16000):
         m = meaning(rng, i)
@@ -1008,11 +1008,58 @@ def datasets(epoch=0):
 
 
 def corpus(seed, count, heldout=False):
-    # Compatibility for the existing benchmark; all examples come from meaning groups.
-    items = datasets()["development" if heldout else "train"]
+    items = load_datasets()["development" if heldout else "train"]
     rng = random.Random(seed)
     rng.shuffle(items)
     return [row(r) for r in items[:count]]
+
+
+def load_datasets(directory=DATA):
+    """Read annotated JSONL as written; never generate text or replace labels."""
+    sets = {}
+    owners = {}
+    for split in ("train", "development", "patternHoldout", "authoredHoldout"):
+        name = "authored" if split == "authoredHoldout" else split
+        path = directory / f"{name}.jsonl"
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"Missing {path}. Run pnpm run prepare:cron-data before training."
+            )
+        records = []
+        for line_number, line in enumerate(path.read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+                text = item["text"]
+                if not isinstance(text, str) or not 0 < len(text) <= MAX_TOKENS:
+                    raise ValueError("text must contain 1–512 characters")
+                if item["family"] not in FAMILIES:
+                    raise ValueError("unknown family")
+                labels = item["tokens"]
+                spans = [(t.start(), t.end()) for t in tokens(text)]
+                if not spans or spans != [(t["start"], t["end"]) for t in labels]:
+                    raise ValueError("token offsets must match every token in text")
+                if any(t["role"] not in ROLES for t in labels):
+                    raise ValueError("unknown semantic role")
+                if item["target"]["status"] not in (
+                    "supported",
+                    "unsupported",
+                    "ambiguous",
+                ):
+                    raise ValueError("unknown target status")
+                group = group_id(item["target"])
+                if item["groupId"] != group:
+                    raise ValueError("groupId does not match the target meaning")
+                if owners.setdefault(group, split) != split:
+                    raise ValueError("meaning appears in multiple splits")
+            except (ValueError, KeyError, TypeError, AttributeError) as error:
+                raise ValueError(f"{path}:{line_number}: {error}") from error
+            records.append(item)
+        if not records:
+            raise ValueError(f"{path}: expected at least one annotated record")
+        sets[split] = records
+    return sets
 
 
 def write_manifest(sets, directory=DATA):

@@ -17,6 +17,7 @@ from mlx import nn
 from mlx.utils import tree_flatten, tree_unflatten
 
 from data import (
+    DATA,
     FAMILIES,
     MAX_TOKENS,
     ROLES,
@@ -24,8 +25,8 @@ from data import (
     VERSION,
     VOCAB,
     WIDTH,
-    datasets,
     features,
+    load_datasets,
     row,
     write_manifest,
     write_vocabulary,
@@ -228,7 +229,7 @@ def pack_weights(model):
 
 def fit(sets, manifest, epochs, resume):
     training = [row(item) for item in sets["train"]]
-    x, y, r = arrays(training, 64)
+    x, y, r = arrays(training)
     # Equal family sampling prevents rare interval/unsupported meanings being swamped
     # by the much larger space of clock + weekday combinations.
     family_indices = [
@@ -267,16 +268,6 @@ def fit(sets, manifest, epochs, resume):
             mx.array(v, dtype=mx.uint32) for v in progress["randomState"]
         ]
         start_epoch = progress["epoch"] + 1
-    if start_epoch:
-        training = [row(item) for item in datasets(start_epoch)["train"]]
-        x, y, r = arrays(training, 64)
-        family_indices = [
-            mx.array(
-                [i for i, (_, label, _) in enumerate(training) if label == family],
-                dtype=mx.int32,
-            )
-            for family in range(FAMILY_COUNT)
-        ]
     model.qat = start_epoch >= epochs - 12
     step, state = training_step(model, optimizer)
     mx.eval(x, y, r, state)
@@ -286,16 +277,6 @@ def fit(sets, manifest, epochs, resume):
         flush=True,
     )
     for epoch in range(start_epoch, epochs):
-        if epoch > start_epoch:
-            training = [row(item) for item in datasets(epoch)["train"]]
-            x, y, r = arrays(training, 64)
-            family_indices = [
-                mx.array(
-                    [i for i, (_, label, _) in enumerate(training) if label == family],
-                    dtype=mx.int32,
-                )
-                for family in range(FAMILY_COUNT)
-            ]
         if epoch == epochs - 12:
             model.qat = True
             step, state = training_step(
@@ -350,16 +331,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=45)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DATA,
+        help="Directory containing the annotated JSONL splits",
+    )
     args = parser.parse_args()
     if args.epochs < 1:
         parser.error("--epochs must be positive")
+    started = time.perf_counter()
+    sets = load_datasets(args.data_dir)
     CANDIDATE.mkdir(parents=True, exist_ok=True)
     use_gpu()
-    started = time.perf_counter()
-    sets = datasets()
     manifest = write_manifest(
         sets, CANDIDATE / "data"
-    )  # Commit split identity before fitting any weights.
+    )  # Snapshot the loaded records and split identity before fitting.
     vocabulary_size = write_vocabulary(sets["train"], CANDIDATE / "vocabulary.json")
     model, train_seconds, training_examples = fit(
         sets, manifest, args.epochs, args.resume
@@ -396,7 +383,8 @@ def main():
         "quantization": "signed six-bit per tensor, final 12 epochs deployment-matched fake quantization",
         "epochs": args.epochs,
         "batchSize": 256,
-        "sampling": "Fresh phrasings every epoch; uniform family sampling from fixed training-only meaning groups",
+        "sampling": "Fixed annotated JSONL records loaded once; uniform family sampling with replacement each epoch",
+        "dataFormat": "jsonl",
         "regularization": "8% token embedding dropout and 10% bidirectional context dropout during training only",
         "trainingExamples": training_examples,
         "trainingSeconds": train_seconds,

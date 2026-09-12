@@ -12,6 +12,7 @@ The browser package embeds packed learned weights and a purpose-built WGSL runti
 mise trust
 mise install
 mise run setup
+mise exec -- pnpm run prepare:cron-data
 mise run dev
 ```
 
@@ -115,7 +116,8 @@ Offline paraphrase prompts and annotated imports use `training/paraphrases.py`; 
 ## Train the tiny model
 
 ```sh
-mise run train:cron                       # train an isolated MLX candidate
+mise exec -- pnpm run prepare:cron-data    # generate inspectable JSONL files
+mise run train:cron                       # train a candidate from those files
 mise exec -- pnpm run evaluate:cron:candidate # WebGPU parity + semantic quality gate
 mise exec -- pnpm run promote:cron        # recheck, then promote candidate artifacts
 mise exec -- pnpm run export:onnx         # refresh optional verification graph
@@ -123,15 +125,17 @@ mise run check
 mise run benchmark:training
 ```
 
-Training uses locked uv dependencies, MLX and Apple Metal. Structured meanings are split before rendering, with authored meanings reserved. Every epoch generates fresh composable phrasings; families are sampled evenly. Semantic roles identify quantities, clock values, offsets, weekdays and exclusions. Token/context dropout improves robustness, and the final 12 epochs apply six-bit fake quantization. Six offline assistant paraphrases retain frozen training parents. No teacher is shipped in the browser.
+Training uses locked uv dependencies, MLX and Apple Metal. Structured meanings are split before rendering, with authored meanings reserved. The generator writes annotated samples to `training/data/*.jsonl`. The trainer loads those files once, then samples families evenly from the same records each epoch; it does not generate sentences during fitting. Semantic roles identify quantities, clock values, offsets, weekdays and exclusions. Token/context dropout improves robustness, and the final 12 epochs apply six-bit fake quantization. Six offline assistant paraphrases retain frozen training parents. No teacher is shipped in the browser.
 
 The candidate gate requires at least 2,649/2,661 exact generated schedules, 485/489 exact pattern schedules, and 116/120 exact authored schedules, with at most seven unsupported and two ambiguous authored requests accepted. These floors prevent regressions; they do not resolve the nine known false acceptances. Dataset hashes are pinned so changing a collection requires an explicit review of its floor. Further reduction of false acceptance is still required for robust generalization.
 
 The network sums learned 24-dimensional word-hash, consonant-hash and shape embeddings, runs bidirectional affine scans, and predicts 16 semantic roles plus seven family scores. It has no word-vocabulary lookup or shared unknown-word ID. All inference operators are specialized WGSL, independent of the training framework. `src/model/vocabulary.json` is only a training-word audit artifact.
 
-The recorded M2 Max run took 107.5 seconds for 45 epochs, regenerating 23,177 training records per epoch. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`. The separate ONNX export verifies the exact shipped coefficients; it is not imported by the browser. `mise exec -- pnpm run export:onnx` exports existing weights without retraining.
+The shipped model's recorded M2 Max run took 107.5 seconds for 45 epochs using the earlier pipeline that regenerated phrasings each epoch. New runs train from the fixed JSONL corpus; that historical timing and accuracy do not measure the new training workflow. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`. The separate ONNX export verifies the exact shipped coefficients; it is not imported by the browser. `mise exec -- pnpm run export:onnx` exports existing weights without retraining.
 
 Actual WebGPU evaluation now produces **116/120 exact authored schedules**, versus the original 23/120. The compiler produces 120/120 with annotated roles, versus 29/120. **9/80 unsupported or ambiguous authored requests are still incorrectly accepted.** These are development results on assistant-authored requests, not broad real-user accuracy. Old token scores are not directly comparable because the label vocabulary changed. See [MODEL_CARD.md](MODEL_CARD.md) and [the data protocol](training/data/README.md).
+
+Inspect or edit `training/data/train.jsonl` before training. Labels are read as stored, with token-offset, role, family, and split-leakage validation. `--data-dir PATH` selects another directory containing `train.jsonl`, `development.jsonl`, `patternHoldout.jsonl`, and `authored.jsonl`. Training snapshots the loaded records under `training/candidate/data/` for later evaluation and resume identity. Checks and evaluation never regenerate these inputs. Rerunning `prepare:cron-data` intentionally replaces generated data, so keep any curated edits elsewhere first.
 
 Evaluation reports normally go to ignored `test-artifacts/evaluation/`; pass `--write` directly to `scripts/evaluate-cron.mjs` to refresh committed reports. Candidate reports stay alongside the candidate. Historical training and export source hashes are preserved in the provenance reports under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
 

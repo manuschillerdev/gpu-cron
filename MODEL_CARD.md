@@ -10,6 +10,8 @@ The compiler consumes predicted semantic values and performs number decoding, cl
 
 ## Training
 
+The shipped model was trained with the earlier on-the-fly rendering pipeline described here. New candidate runs load fixed JSONL files from disk; the recorded measurements below are not results of that revised workflow.
+
 Data version 12 generates structured meanings first. All supported authored meanings remain reserved from training; generated positive meanings are grouped before rendering. The epoch-zero manifest contains 23,177 training records across 6,819 groups. Each of 45 epochs renders fresh phrasings of those training meanings and samples families evenly. Renderers compose digital/spoken clocks, clock offsets, bare hours, ordinal/list/range forms, singular/plural weekdays, task prose, alternate weeks and reordered exclusions. Six existing offline assistant paraphrases retain frozen training parents.
 
 Unsupported generator categories stay in training. Their ordinary words retain semantic roles where possible; unresolved restrictions receive unknown labels. Generated development contains supported requests only, so its score says nothing about rejection quality. The separate authored collection supplies ambiguous and unsupported requests.
@@ -40,11 +42,12 @@ ONNX remains a development-only portable export (175,307 bytes). No ONNX, WASM l
 
 ## Candidate promotion
 
-Training now produces isolated candidate artifacts. Promotion requires fresh WebGPU/MLX parity, the complete-bundle size budget, and the mixed development regression floors in `training/quality.json`. The floors retain the recorded 116/120 authored supported schedules and at most 9/80 false acceptances; they prevent regression and do not claim to solve those remaining failures. Shipped coefficients and fixtures were not regenerated for the pipeline refactor. Original source hashes remain in the reports under `sourceMaintenance`.
+Training reads `training/data/*.jsonl` once (or a supplied `--data-dir`), uses the same records each epoch with balanced family sampling, and produces isolated candidate artifacts. Input labels are preserved and validated, and the loaded dataset is snapshotted beside the candidate. Generate the files explicitly with `prepare:cron-data`; checks never regenerate them. Promotion requires fresh WebGPU/MLX parity, the complete-bundle size budget, and the mixed development regression floors in `training/quality.json`. The floors retain the recorded 116/120 authored supported schedules and at most 9/80 false acceptances; they prevent regression and do not claim to solve those remaining failures. Shipped coefficients and fixtures were not regenerated for the pipeline refactor. Original source hashes remain in the reports under `sourceMaintenance`.
 
 ## Reproduce
 
 ```sh
+mise exec -- pnpm run prepare:cron-data
 mise run train:cron
 mise exec -- pnpm run evaluate:cron:candidate
 mise exec -- pnpm run promote:cron

@@ -10,7 +10,7 @@ The 16 roles are defined in `training/data.py` and mirrored in `src/features.ts`
 
 Canonical positive meaning determines the split before rendering. Family is omitted from the grouping key so equivalent recurrences cannot leak under different family names. All paraphrases of a generated meaning remain together. Authored meanings are reserved first. Unsupported generator categories stay in training; generated development scores therefore cover supported schedules only, while authored evaluation measures unsupported/ambiguous behavior separately.
 
-Each epoch uses a deterministic surface seed and fresh phrasings of the training meanings: digital and spoken clocks, relative clock arithmetic, lists/ranges, ordinals, task phrases, punctuation, alternate weeks and reordered exclusions. Evaluation rendering uses fixed seeds. `manifest.json` records epoch-zero split identities and hashes before fitting. `src/model/vocabulary.json` is now an audit list of words observed in epoch zero; it is not a runtime vocabulary or input lookup.
+The generator uses a deterministic surface seed to render the training meanings with digital and spoken clocks, relative clock arithmetic, lists/ranges, ordinals, task phrases, punctuation, alternate weeks and reordered exclusions. Evaluation rendering uses fixed seeds. Preparation writes the samples as JSONL, one annotated object per line. The trainer loads them once and reuses those samples in every epoch, resampling balanced batches without creating new text. It reads semantic roles exactly as stored; it does not refine or regenerate annotations while loading. `manifest.json` records split identities and hashes. `src/model/vocabulary.json` is an audit list of training words; it is not a runtime vocabulary or input lookup.
 
 ```sh
 mise exec -- pnpm run prepare:cron-data
@@ -19,7 +19,9 @@ mise exec -- pnpm run evaluate:cron:candidate
 mise exec -- pnpm run promote:cron
 ```
 
-Training writes a candidate manifest, data, weights, and fixtures under ignored `training/candidate/`. Promotion reruns WebGPU/MLX parity, exact-schedule and rejection floors, and the complete-bundle size budget before replacing shipped artifacts. The generated JSONL files are ignored by git and reproducible. The authored collection, six offline assistant paraphrases, frozen parents, generator and manifest are versioned. Training samples families evenly, applies 8% token embedding dropout and 10% context dropout and uses six-bit fake quantization in the final 12 epochs. Augmentation is disabled for evaluation/export.
+Inspect or edit the JSONL before fitting. Token offsets and labels must still align with the text, and meanings must not leak between splits. Use `--data-dir PATH` to read a separate directory with the same four JSONL filenames. Checks and evaluation do not regenerate inputs; rerunning preparation explicitly replaces generated files.
+
+Training writes a candidate manifest, a snapshot of the loaded data, weights, and fixtures under ignored `training/candidate/`. Promotion reruns WebGPU/MLX parity, exact-schedule and rejection floors, and the complete-bundle size budget before replacing shipped artifacts. The generated JSONL files are ignored by git and reproducible. The authored collection, six offline assistant paraphrases, frozen parents, generator and manifest are versioned. Training samples families evenly, applies 8% token embedding dropout and 10% context dropout and uses six-bit fake quantization in the final 12 epochs. Augmentation is disabled for evaluation/export.
 
 ## Offline paraphrases
 
