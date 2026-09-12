@@ -15,26 +15,29 @@ export const MODEL_INFO = Object.freeze({
 });
 export const SEGMENTS = weights.segments;
 export function decodeWeights(): Float32Array {
-  const bytes = atob(weights.data);
+  const packed = atob(weights.data);
   const result = new Float32Array(weights.parameters);
-  let bits = 0,
-    available = 0,
-    cursor = 0;
+  let bitBuffer = 0;
+  let bitCount = 0;
+  let byteIndex = 0;
+
   for (const segment of weights.segments) {
     for (let i = segment.offset; i < segment.offset + segment.length; i++) {
-      while (available < 6) {
-        bits |= bytes.charCodeAt(cursor++) << available;
-        available += 8;
+      while (bitCount < 6) {
+        bitBuffer |= packed.charCodeAt(byteIndex++) << bitCount;
+        bitCount += 8;
       }
-      const q = bits & 63;
-      bits >>>= 6;
-      available -= 6;
-      result[i] = (q >= 32 ? q - 64 : q) * segment.scale;
+      const unsignedValue = bitBuffer & 63;
+      const signedValue = unsignedValue >= 32 ? unsignedValue - 64 : unsignedValue;
+      result[i] = signedValue * segment.scale;
+      bitBuffer >>>= 6;
+      bitCount -= 6;
     }
   }
   return result;
 }
-function best(scores: Float32Array): { index: number; confidence: number } {
+
+function highestScore(scores: Float32Array): { index: number; confidence: number } {
   let index = 0;
   for (let i = 1; i < scores.length; i++) if (scores[i]! > scores[index]!) index = i;
   const sum = Array.from(scores).reduce((total, v) => total + Math.exp(v - scores[index]!), 0);
@@ -50,14 +53,14 @@ export interface TokenPrediction {
 /** Raw softmax scores are not calibrated correctness probabilities. */
 export function prediction(
   logits: Float32Array,
-  text = '',
+  text: string,
 ): { family: Family; confidence: number; tokens: TokenPrediction[] } {
-  const family = best(logits.subarray(0, FAMILIES.length));
+  const family = highestScore(logits.subarray(0, FAMILIES.length));
   return {
     family: FAMILIES[family.index]!,
     confidence: family.confidence,
     tokens: tokenize(text).map((token, i) => {
-      const role = best(
+      const role = highestScore(
         logits.subarray(
           FAMILIES.length + i * ROLES.length,
           FAMILIES.length + (i + 1) * ROLES.length,

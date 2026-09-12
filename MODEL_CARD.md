@@ -34,7 +34,7 @@ Evaluation prints network metrics, actual compiler results, and compiler results
 
 ## Deployment and limitations
 
-Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 63,922 bytes, or **32,032 bytes (31.3 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
+Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 64,980 bytes, or **32,322 bytes (31.6 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
 
 The runtime reuses the device, pipelines, weights and buffers, queues calls and chunks batches at 128. Inputs retain the 512-character limit; training uses a 64-token bucket. Long-input and multilingual generalization are unmeasured. Six-bit quantization and platform differences are checked by comparing the existing quantized MLX fixtures directly with real Chromium WebGPU. No new regression cases were added.
 

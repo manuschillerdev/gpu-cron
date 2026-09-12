@@ -29,6 +29,95 @@ function clearOutput(): void {
   });
 }
 
+function renderNetwork(result: ParseResult, elapsedMilliseconds: number): void {
+  get('status').textContent =
+    `${result.model.backend.toUpperCase()} · ${elapsedMilliseconds.toFixed(0)} ms`;
+
+  const unknownTokens = result.model.tokens.filter((token) => token.role === 'unknown').length;
+  const unknownSummary = unknownTokens
+    ? ` · ${unknownTokens} unknown token${unknownTokens === 1 ? '' : 's'}`
+    : '';
+  get('network-status').textContent =
+    `${result.model.family} · ${(result.model.confidence * 100).toFixed(1)}% model score${unknownSummary}`;
+
+  const container = get('network-tokens');
+  for (const token of result.model.tokens) {
+    const item = document.createElement('span');
+    item.className = 'network-token';
+    item.dataset.role = token.role;
+    item.title = `${token.role}: ${(token.confidence * 100).toFixed(1)}% model score`;
+
+    const text = document.createElement('span');
+    text.textContent = token.text;
+    const label = document.createElement('small');
+    label.textContent = token.role;
+    item.append(text, label);
+    container.append(item);
+  }
+}
+
+function renderCompiler(result: ParseResult): void {
+  get('description').textContent =
+    result.description ?? 'The compiler could not produce a schedule.';
+  get('compiler-status').textContent = result.schedule
+    ? 'Structured schedule produced.'
+    : 'No schedule produced. Compiler diagnostics are shown below.';
+
+  copy.disabled = !result.cron;
+  const fields = result.cron?.split(' ') ?? ['—', '—', '—', '—', '—'];
+  document.querySelectorAll('#cron-fields strong').forEach((node, index) => {
+    node.textContent = fields[index]!;
+  });
+
+  const diagnostics = get('diagnostics');
+  for (const diagnostic of result.diagnostics) {
+    const message = document.createElement('p');
+    message.className = `diagnostic ${diagnostic.severity}`;
+    message.textContent = diagnostic.message;
+    diagnostics.append(message);
+  }
+}
+
+function renderOccurrences(result: ParseResult): void {
+  const date = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone.value,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone.value,
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+
+  get('preview-zone').textContent = timezone.value;
+  const occurrences = get('occurrences');
+  result.occurrences.forEach((instant, index) => {
+    const item = document.createElement('li');
+    const sequence = document.createElement('span');
+    sequence.className = 'run-index';
+    sequence.textContent = String(index + 1).padStart(2, '0');
+    const day = document.createElement('span');
+    day.textContent = date.format(new Date(instant));
+    const clock = document.createElement('time');
+    clock.dateTime = instant;
+    clock.textContent = time.format(new Date(instant));
+    item.append(sequence, day, clock);
+    occurrences.append(item);
+  });
+}
+
+function renderResult(next: ParseResult, elapsedMilliseconds: number): void {
+  result = next;
+  renderNetwork(next, elapsedMilliseconds);
+  renderCompiler(next);
+  renderOccurrences(next);
+  get('json').textContent = JSON.stringify(next, null, 2);
+}
+
 async function update(): Promise<void> {
   const current = ++revision;
   const panel = document.querySelector('.result')!;
@@ -44,68 +133,7 @@ async function update(): Promise<void> {
       count: 5,
     });
     if (current !== revision) return;
-    result = next;
-    get('status').textContent =
-      `${next.model.backend.toUpperCase()} · ${(performance.now() - start).toFixed(0)} ms`;
-    get('description').textContent =
-      next.description ?? 'The compiler could not produce a schedule.';
-    const unknown = next.model.tokens.filter((token) => token.role === 'unknown').length;
-    get('network-status').textContent =
-      `${next.model.family} · ${(next.model.confidence * 100).toFixed(1)}% model score${unknown ? ` · ${unknown} unknown token${unknown === 1 ? '' : 's'}` : ''}`;
-    for (const token of next.model.tokens) {
-      const item = document.createElement('span');
-      item.className = 'network-token';
-      item.dataset.role = token.role;
-      const text = document.createElement('span');
-      text.textContent = token.text;
-      const label = document.createElement('small');
-      label.textContent = token.role;
-      item.title = `${token.role}: ${(token.confidence * 100).toFixed(1)}% model score`;
-      item.append(text, label);
-      get('network-tokens').append(item);
-    }
-    get('compiler-status').textContent = next.schedule
-      ? 'Structured schedule produced.'
-      : 'No schedule produced. Compiler diagnostics are shown below.';
-    copy.disabled = !next.cron;
-    const fields = next.cron?.split(' ') ?? ['—', '—', '—', '—', '—'];
-    document.querySelectorAll('#cron-fields strong').forEach((node, i) => {
-      node.textContent = fields[i]!;
-    });
-    for (const diagnostic of next.diagnostics) {
-      const node = document.createElement('p');
-      node.className = `diagnostic ${diagnostic.severity}`;
-      node.textContent = diagnostic.message;
-      get('diagnostics').append(node);
-    }
-    const date = new Intl.DateTimeFormat('en-GB', {
-      timeZone: timezone.value,
-      weekday: 'short',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-    const time = new Intl.DateTimeFormat('en-GB', {
-      timeZone: timezone.value,
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    });
-    get('preview-zone').textContent = timezone.value;
-    next.occurrences.forEach((instant, i) => {
-      const li = document.createElement('li');
-      const index = document.createElement('span');
-      index.className = 'run-index';
-      index.textContent = String(i + 1).padStart(2, '0');
-      const day = document.createElement('span');
-      day.textContent = date.format(new Date(instant));
-      const clock = document.createElement('time');
-      clock.dateTime = instant;
-      clock.textContent = time.format(new Date(instant));
-      li.append(index, day, clock);
-      get('occurrences').append(li);
-    });
-    get('json').textContent = JSON.stringify(next, null, 2);
+    renderResult(next, performance.now() - start);
   } catch (error) {
     if (current !== revision) return;
     clearOutput();

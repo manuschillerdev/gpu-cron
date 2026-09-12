@@ -72,6 +72,10 @@ NUMBERS = [
 ]
 DATA = Path(__file__).resolve().parent / "data"
 
+# Feature encoding -----------------------------------------------------------
+# Keep this intentionally parallel to src/features.ts. MLX and WebGPU must see
+# exactly the same integer for every token.
+
 
 def tokens(text):
     return list(re.finditer(r"[A-Za-z]+|[0-9]+|[^\s]", text))
@@ -79,8 +83,8 @@ def tokens(text):
 
 def word_hash(text):
     value = 2166136261
-    for c in text:
-        value = ((value ^ ord(c)) * 16777619) & 0xFFFFFFFF
+    for character in text:
+        value = ((value ^ ord(character)) * 16777619) & 0xFFFFFFFF
     return value
 
 
@@ -99,11 +103,13 @@ def token_id(text):
 
 
 def features(text, length=MAX_TOKENS):
-    ts = tokens(text)
-    if len(ts) > length:
+    text_tokens = tokens(text)
+    if len(text_tokens) > length:
         raise ValueError("Sequence exceeds token capacity")
     return np.array(
-        [token_id(t[0]) for t in ts] + [0] * (length - len(ts)), dtype=np.float32
+        [token_id(token[0]) for token in text_tokens]
+        + [0] * (length - len(text_tokens)),
+        dtype=np.float32,
     )
 
 
@@ -131,6 +137,10 @@ ORDINALS = [
     "twentieth",
 ]
 NUMBER_WORDS = set(NUMBERS + ["thirty", "forty", "fifty"] + ORDINALS + ["thirtieth"])
+
+# Annotation -----------------------------------------------------------------
+# The generator first labels broad pieces such as "time" or "recurrence".
+# semantic_labels refines those pieces into the roles learned by the model.
 
 
 def number_word(n):
@@ -331,6 +341,11 @@ def schedule(
     }
 
 
+# Meaning generation ---------------------------------------------------------
+# Create a structured target before choosing any wording. This keeps splitting
+# independent of phrasing and prevents paraphrases from crossing data splits.
+
+
 def group_id(target):
     # Paraphrases with identical supported meaning share a group, regardless of source.
     semantic = (
@@ -512,6 +527,10 @@ def spoken_clock(hour, minute, rng):
         + " "
         + hour_text(base)
     )
+
+
+# Surface rendering ----------------------------------------------------------
+# Render each meaning in several natural forms while preserving token labels.
 
 
 def render_unsupported(m, rng, pattern):
@@ -938,6 +957,11 @@ def datasets():
             if old != split:
                 raise ValueError(f"Meaning leaks between {old} and {split}")
     return result
+
+
+# JSONL interface ------------------------------------------------------------
+# Training reads these files exactly as written. Generation is an explicit,
+# separate step so students can inspect or edit samples before fitting.
 
 
 def load_datasets(directory=DATA):

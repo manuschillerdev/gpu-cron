@@ -8,6 +8,15 @@ const SCAN_LEVELS = Math.log2(FEATURE_COUNT);
 const PROJECT = 1 + SCAN_LEVELS;
 const TOKEN_ROLES = PROJECT + 1;
 const FAMILY_SCORES = PROJECT + 2;
+
+const enum BufferIndex {
+  Input,
+  ScanA,
+  ScanB,
+  Hidden,
+  Output,
+}
+
 const offset = (name: string) => {
   const segment = SEGMENTS.find((s) => s.name === name);
   if (!segment) throw new Error(`Missing model tensor ${name}`);
@@ -232,6 +241,7 @@ export class CronModel {
   private allocate(rows: number): void {
     if (rows <= this.capacity) return;
     const capacity = 2 ** Math.ceil(Math.log2(rows));
+    // One width for each BufferIndex, measured in float32 values per input row.
     const widths = [
       FEATURE_COUNT,
       FEATURE_COUNT * 4 * H,
@@ -253,22 +263,70 @@ export class CronModel {
       size: capacity * OUTPUT_COUNT * 4,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     });
-    this.groups = [0, 1].map((swap) =>
-      this.device.createBindGroup({
+    this.groups = [0, 1].map((swap) => {
+      const scanInput = swap === 0 ? BufferIndex.ScanA : BufferIndex.ScanB;
+      const scanOutput = swap === 0 ? BufferIndex.ScanB : BufferIndex.ScanA;
+      return this.device.createBindGroup({
         layout: this.layout,
         entries: [
-          this.buffers[0]!,
+          this.buffers[BufferIndex.Input]!,
           this.weights,
-          this.buffers[1 + swap]!,
-          this.buffers[2 - swap]!,
-          this.buffers[3]!,
-          this.buffers[4]!,
+          this.buffers[scanInput]!,
+          this.buffers[scanOutput]!,
+          this.buffers[BufferIndex.Hidden]!,
+          this.buffers[BufferIndex.Output]!,
           this.uniform,
         ].map((buffer, binding) => ({ binding, resource: { buffer } })),
-      }),
-    );
+      });
+    });
     this.capacity = capacity;
   }
+
+  private async runChunk(data: Float32Array, rows: number): Promise<Float32Array> {
+    let tokenCount = 1;
+    for (let index = 0; index < data.length; index++) {
+      if (data[index] !== 0) tokenCount = Math.max(tokenCount, (index % FEATURE_COUNT) + 1);
+    }
+    const scanWidth = 2 ** Math.ceil(Math.log2(tokenCount));
+
+    this.allocate(rows);
+    this.device.queue.writeBuffer(this.buffers[BufferIndex.Input]!, 0, data);
+    this.device.queue.writeBuffer(this.uniform, 0, new Uint32Array([rows, scanWidth, 0, 0]));
+
+    const encoder = this.device.createCommandEncoder();
+    encoder.clearBuffer(this.buffers[BufferIndex.Output]!);
+    const dispatch = (pipeline: number, group: number, invocations: number) => {
+      const pass = encoder.beginComputePass();
+      pass.setPipeline(this.pipelines[pipeline]!);
+      pass.setBindGroup(0, this.groups[group]!);
+      pass.dispatchWorkgroups(Math.ceil(invocations / 64));
+      pass.end();
+    };
+
+    dispatch(0, 0, rows * scanWidth * H); // Embedding and affine recurrence parameters.
+    let activeBindGroup = 1;
+    for (let level = 0; 2 ** level < scanWidth; level++) {
+      dispatch(1 + level, activeBindGroup, rows * scanWidth * 2 * H);
+      activeBindGroup = 1 - activeBindGroup;
+    }
+    dispatch(PROJECT, activeBindGroup, rows * scanWidth * 32);
+    dispatch(TOKEN_ROLES, activeBindGroup, rows * scanWidth * R);
+    dispatch(FAMILY_SCORES, activeBindGroup, rows * F);
+
+    const byteLength = rows * OUTPUT_COUNT * Float32Array.BYTES_PER_ELEMENT;
+    encoder.copyBufferToBuffer(this.buffers[BufferIndex.Output]!, 0, this.readback!, 0, byteLength);
+    this.device.queue.submit([encoder.finish()]);
+
+    await this.readback!.mapAsync(GPUMapMode.READ, 0, byteLength);
+    try {
+      const result = new Float32Array(rows * OUTPUT_COUNT);
+      result.set(new Float32Array(this.readback!.getMappedRange(0, byteLength)));
+      return result;
+    } finally {
+      this.readback!.unmap();
+    }
+  }
+
   logits(input: Float32Array): Promise<Float32Array> {
     if (this.closed) return Promise.reject(new Error('Model is disposed.'));
     if (input.length % FEATURE_COUNT)
@@ -281,45 +339,9 @@ export class CronModel {
       const output = new Float32Array(rows * OUTPUT_COUNT);
       // Bound storage use for the public 4096-expression batch limit.
       for (let start = 0; start < rows; start += 128) {
-        const count = Math.min(128, rows - start),
-          data = snapshot.subarray(start * FEATURE_COUNT, (start + count) * FEATURE_COUNT);
-        let length = 1;
-        for (let i = 0; i < data.length; i++)
-          if (data[i] !== 0) length = Math.max(length, (i % FEATURE_COUNT) + 1);
-        const width = 2 ** Math.ceil(Math.log2(length));
-        this.allocate(count);
-        this.device.queue.writeBuffer(this.buffers[0]!, 0, data);
-        this.device.queue.writeBuffer(this.uniform, 0, new Uint32Array([count, width, 0, 0]));
-        const encoder = this.device.createCommandEncoder();
-        encoder.clearBuffer(this.buffers[4]!);
-        const dispatch = (pipeline: number, group: number, work: number) => {
-          const pass = encoder.beginComputePass();
-          pass.setPipeline(this.pipelines[pipeline]!);
-          pass.setBindGroup(0, this.groups[group]!);
-          pass.dispatchWorkgroups(Math.ceil(work / 64));
-          pass.end();
-        };
-        dispatch(0, 0, count * width * H); // Embedding writes buffer 2.
-        let group = 1;
-        for (let level = 0; 2 ** level < width; level++) {
-          dispatch(1 + level, group, count * width * 2 * H);
-          group = 1 - group;
-        }
-        dispatch(PROJECT, group, count * width * 32);
-        dispatch(TOKEN_ROLES, group, count * width * R);
-        dispatch(FAMILY_SCORES, group, count * F);
-        const bytes = count * OUTPUT_COUNT * 4;
-        encoder.copyBufferToBuffer(this.buffers[4]!, 0, this.readback!, 0, bytes);
-        this.device.queue.submit([encoder.finish()]);
-        await this.readback!.mapAsync(GPUMapMode.READ, 0, bytes);
-        try {
-          output.set(
-            new Float32Array(this.readback!.getMappedRange(0, bytes)),
-            start * OUTPUT_COUNT,
-          );
-        } finally {
-          this.readback!.unmap();
-        }
+        const chunkRows = Math.min(128, rows - start);
+        const chunk = snapshot.subarray(start * FEATURE_COUNT, (start + chunkRows) * FEATURE_COUNT);
+        output.set(await this.runChunk(chunk, chunkRows), start * OUTPUT_COUNT);
       }
       this.outputLocations = ['gpu-buffer'];
       return output;

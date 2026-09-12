@@ -69,7 +69,7 @@ Model inference requires WebGPU. Unsupported browsers and device errors produce 
 
 Cron weights are embedded as packed signed six-bit values and expanded to float32 once during initialization. The runtime creates specialized WGSL pipelines for the fixed network, uploads weights once, and reuses input/intermediate/readback buffers, growing them when a larger batch arrives. Each instance queues calls to keep buffer reuse safe. No general model loader, operator library, WASM payload, or runtime dependency is shipped. See [MODEL_CARD.md](MODEL_CARD.md).
 
-`pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **31.3 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
+`pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **31.6 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
 
 ## Supported language
 

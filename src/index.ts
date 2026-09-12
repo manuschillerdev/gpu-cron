@@ -8,6 +8,65 @@ import type { ParseOptions, ParseResult, Parser } from './types.js';
 export type { Diagnostic, Family, ParseOptions, ParseResult, Parser, Schedule } from './types.js';
 export { MODEL_INFO } from './model/parameters.js';
 
+function emptyResult(text: string, model: ParseResult['model']): ParseResult {
+  return {
+    input: text,
+    schedule: null,
+    cron: null,
+    description: null,
+    occurrences: [],
+    diagnostics: [],
+    model,
+  };
+}
+
+function resultFromPrediction(
+  text: string,
+  logits: Float32Array,
+  runtime: CronModel,
+  options: ReturnType<typeof context>,
+): ParseResult {
+  const model: ParseResult['model'] = {
+    ...prediction(logits, text),
+    backend: 'webgpu',
+    executionProvider: runtime.executionProvider,
+    outputLocations: [...runtime.outputLocations],
+  };
+  const result = emptyResult(text, model);
+
+  if (!text.trim()) {
+    result.diagnostics.push({
+      code: 'invalid-input',
+      severity: 'error',
+      message: 'Enter a recurring schedule.',
+    });
+    return result;
+  }
+
+  const compiled = compile(text, model.family, options.timeZone, options.anchorWeek, model.tokens);
+  if (!compiled.schedule) {
+    result.diagnostics = compiled.diagnostics;
+    return result;
+  }
+
+  result.schedule = compiled.schedule;
+  result.description = describe(compiled.schedule);
+  result.occurrences = preview(compiled.schedule, options.reference, options.count);
+  result.diagnostics = compiled.diagnostics;
+
+  const exported = cron(compiled.schedule);
+  result.cron = exported.expression;
+  if (exported.reason)
+    result.diagnostics.push({ code: 'not-cron', severity: 'warning', message: exported.reason });
+  if (result.occurrences.length < options.count)
+    result.diagnostics.push({
+      code: 'preview-limit',
+      severity: 'warning',
+      message: 'Fewer occurrences were found within the five-year preview horizon.',
+    });
+  return result;
+}
+
 export function defineParser(): Parser {
   let disposed = false;
   let gpu: Promise<CronModel> | undefined;
@@ -27,7 +86,6 @@ export function defineParser(): Parser {
     }
     const input = new Float32Array(texts.length * FEATURE_COUNT);
     texts.forEach((text, i) => input.set(features(text), i * FEATURE_COUNT));
-    const backend = 'webgpu' as const;
     gpu ??= CronModel.create();
     const runtime = await gpu;
     if (disposed) {
@@ -36,59 +94,9 @@ export function defineParser(): Parser {
     }
     const logits = await runtime.logits(input);
     if (disposed) throw new Error('Parser is disposed.');
-    return texts.map((text, i) => {
-      const model = {
-        ...prediction(logits.subarray(i * OUTPUT_COUNT, (i + 1) * OUTPUT_COUNT), text),
-        backend,
-        executionProvider: runtime.executionProvider,
-        outputLocations: [...runtime.outputLocations],
-      };
-      const empty: ParseResult = {
-        input: text,
-        schedule: null,
-        cron: null,
-        description: null,
-        occurrences: [],
-        diagnostics: [],
-        model,
-      };
-      if (!text.trim())
-        return {
-          ...empty,
-          diagnostics: [
-            {
-              code: 'invalid-input',
-              severity: 'error',
-              message: 'Enter a recurring schedule.',
-            },
-          ],
-        };
-      const compiled = compile(text, model.family, ctx.timeZone, ctx.anchorWeek, model.tokens);
-      if (!compiled.schedule) return { ...empty, diagnostics: compiled.diagnostics };
-      const schedule = compiled.schedule;
-      const exported = cron(schedule);
-      const occurrences = preview(schedule, ctx.reference, ctx.count);
-      const diagnostics = [...compiled.diagnostics];
-      if (exported.reason)
-        diagnostics.push({
-          code: 'not-cron',
-          severity: 'warning',
-          message: exported.reason,
-        });
-      if (occurrences.length < ctx.count)
-        diagnostics.push({
-          code: 'preview-limit',
-          severity: 'warning',
-          message: 'Fewer occurrences were found within the five-year preview horizon.',
-        });
-      return {
-        ...empty,
-        schedule,
-        cron: exported.expression,
-        description: describe(schedule),
-        occurrences,
-        diagnostics,
-      };
+    return texts.map((text, index) => {
+      const start = index * OUTPUT_COUNT;
+      return resultFromPrediction(text, logits.subarray(start, start + OUTPUT_COUNT), runtime, ctx);
     });
   }
   return {
