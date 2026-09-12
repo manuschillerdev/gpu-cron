@@ -141,13 +141,32 @@ Evaluation reports go to ignored `test-artifacts/evaluation/`. Candidate reports
 
 ## Source map
 
-- `src/features.ts`: mechanical tokenization and packed word-hash, consonant-hash and shape features.
-- `src/model/`: packed model, specialized GPU runtime, and weight decoding.
-- `src/compile.ts`: semantic-value decoding, typed recurrence, descriptions and cron export.
-- `src/calendar.ts`: local calendar matching and DST-aware future instants.
-- `training/`: generator, trainer, uv lockfile, and measured provenance.
-- `test/`: semantic examples, rejection cases, DST policy, and MLX parity.
-- `demo/`: browser playground.
+```text
+src/                    Browser library
+  index.ts              Public parser interface
+  features.ts           Mechanical tokenization and feature hashing
+  model/                Packed weights, decoding, and WebGPU inference
+  compile.ts            Predicted values → calendar rules → cron
+  calendar.ts           Timezone and DST-aware previews
+  types.ts              Public result and option types
+demo/                   Playground TypeScript and CSS
+training/               Complete offline model pipeline
+  data.py               Prepare and load annotated JSONL
+  data/                 Source examples and split manifest
+  train.py              Fit with MLX and export a candidate
+  evaluate.mjs          Measure candidate or shipped model in WebGPU
+  promote.mjs           Verify and copy a passing candidate
+  quality.json          Semantic regression floors
+  report.json           Shipped model provenance
+test/                   Verification only; nothing ships in the library
+  *.test.mjs            Node parsing, calendar, and model checks
+  browser.mjs           Real WebGPU and demo checks
+  reference.mjs         Numerical reference for verification
+  model-fixtures.json   Quantized MLX reference outputs
+  size.mjs              Complete browser-library size budget
+```
+
+The root `index.html` is Vite's conventional demo entry. Tool configuration and lockfiles stay beside their package manifests. `dist/`, `site/`, `training/candidate/`, and `test-artifacts/` are generated and ignored.
 
 The cron contract follows the [crontab manual](https://man7.org/linux/man-pages/man5/crontab.5.html), particularly field-step resets and the OR relationship between restricted day fields. Browser inference uses WebGPU directly, verified against MLX fixtures.
 

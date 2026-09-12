@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { features } from '../dist/features.js';
 import { MODEL_INFO } from '../dist/model/parameters.js';
-import { cpuLogits } from '../scripts/cron-reference.mjs';
+import { cpuLogits } from './reference.mjs';
 
 test('JavaScript features and quantized inference match the MLX export', async () => {
   const fixtures = JSON.parse(await readFile(new URL('./model-fixtures.json', import.meta.url)));

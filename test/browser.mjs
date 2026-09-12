@@ -31,7 +31,7 @@ try {
   const fixtures = JSON.parse(await readFile('test/model-fixtures.json', 'utf8'));
   const parity = await page.evaluate(async (fixtures) => {
     const { CronModel } = await import('/src/model/runtime.ts');
-    const { cpuLogits } = await import('/scripts/cron-reference.mjs');
+    const { cpuLogits } = await import('/test/reference.mjs');
     const { features, FEATURE_COUNT } = await import('/dist/features.js');
     const { defineParser } = await import('/src/index.ts');
     const runtime = await CronModel.create();
@@ -134,7 +134,7 @@ try {
 async function checkRuntimeLifecycle(page) {
   return page.evaluate(async () => {
     const { CronModel } = await import('/src/model/runtime.ts');
-    const { cpuLogits } = await import('/scripts/cron-reference.mjs');
+    const { cpuLogits } = await import('/test/reference.mjs');
     const { features } = await import('/src/features.ts');
     const fixtures = await (await fetch('/test/model-fixtures.json')).json();
     const inputs = fixtures.slice(0, 4).map((f) => features(f.text));

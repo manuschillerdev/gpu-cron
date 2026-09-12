@@ -4,7 +4,7 @@ import { parse, parseMany, defineParser } from '../dist/index.js';
 
 // Existing grammar/calendar checks use a test-only numerical stand-in; browser checks execute WebGPU.
 import {CronModel} from '../dist/model/runtime.js';
-import {cpuLogits} from '../scripts/cron-reference.mjs';
+import {cpuLogits} from './reference.mjs';
 mock.method(CronModel,'create',async()=>({executionProvider:'webgpu',outputLocations:['gpu-buffer'],logits:async input=>cpuLogits(input),dispose(){}}));
 const context = { reference: '2026-09-11T12:00:00Z', timeZone: 'UTC', count: 3 };
 const cases = [

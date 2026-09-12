@@ -3,8 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { copyFile } from 'node:fs/promises';
 
 for (const args of [
-  ['scripts/evaluate-cron.mjs', '--candidate', '--check'],
-  ['scripts/size.mjs', '--candidate'],
+  ['training/evaluate.mjs', '--candidate', '--check'],
+  ['test/size.mjs', '--candidate'],
 ]) {
   const result = spawnSync(process.execPath, args, { stdio: 'inherit' });
   if (result.error) throw result.error;
