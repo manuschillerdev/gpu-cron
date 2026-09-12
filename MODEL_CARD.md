@@ -2,9 +2,9 @@
 
 ## Architecture
 
-A **35,783-parameter feature-sum bidirectional affine-scan tagger**, trained in MLX on Apple Metal and deployed as specialized WebGPU shaders. Mechanical tokens preserve source offsets. Each token supplies a full-word hash, consonant hash and shape (kind, length, case), addressing 1,024 + 256 + 32 learned 24-dimensional embedding rows. Their normalized sum replaces the old 182-entry word vocabulary and shared unknown-word ID. Unfamiliar words retain separate features, though hash collisions remain possible.
+A **35,783-parameter feature-sum bidirectional affine-scan tagger**, trained in MLX on Apple Metal and deployed as specialized WebGPU shaders. Mechanical tokens preserve source offsets. Each token supplies a full-word hash, consonant hash and shape (kind, length, case), addressing 1,024 + 256 + 32 learned 24-dimensional embedding rows. Their sum is scaled by 1/√3; there is no vocabulary lookup or shared unknown-word ID. Unfamiliar words retain separate features, though hash collisions remain possible.
 
-A 24 → 48 affine projection produces gates/candidates for parallel forward and backward scans. Embedding and both contexts feed a 72 → 32 → 23 head. Seven channels pool into family scores; 16 predict semantic token roles: prefix/filler, recurrence, quantity, hour, minute, meridiem, clock-offset, clock-direction, weekday, range, monthday, month, excluded-weekday, excluded-month, exclusion and unknown.
+A 24 → 48 affine projection produces gates/candidates for parallel forward and backward scans. Each scan applies `h = a*h_previous + b`. Associative composition `(a2*a1, b2+a2*b1)` permits logarithmic parallel scans. Embedding and both contexts feed a 72 → 32 → 23 head. Seven channels pool into family scores; 16 predict semantic token roles: prefix/filler, recurrence, quantity, hour, minute, meridiem, clock-offset, clock-direction, weekday, range, monthday, month, excluded-weekday, excluded-month, exclusion and unknown.
 
 The compiler consumes predicted semantic values and performs number decoding, clock arithmetic and calendar interpretation. It does not match whole sentences, override the predicted family or recover missing roles from raw text. Unknown roles, incompatible fields and unconsumed predicted ranges are rejected. Incorrect filler predictions can still discard real restrictions; successful compilation is not proof of intended meaning. Raw network labels/scores stay visible independently of compiler output. No confidence gate or CPU inference fallback exists.
 
@@ -12,7 +12,7 @@ The compiler consumes predicted semantic values and performs number decoding, cl
 
 The shipped model was trained with the earlier on-the-fly rendering pipeline described here. New candidate runs load fixed JSONL files from disk; the recorded measurements below are not results of that revised workflow.
 
-Data version 12 generates structured meanings first. All supported authored meanings remain reserved from training; generated positive meanings are grouped before rendering. The epoch-zero manifest contains 23,177 training records across 6,819 groups. Each of 45 epochs renders fresh phrasings of those training meanings and samples families evenly. Renderers compose digital/spoken clocks, clock offsets, bare hours, ordinal/list/range forms, singular/plural weekdays, task prose, alternate weeks and reordered exclusions. Six existing offline assistant paraphrases retain frozen training parents.
+Data version 12 generates structured meanings first. All supported authored meanings remain reserved from training; generated positive meanings are grouped before rendering. The epoch-zero manifest contains 23,177 training records across 6,819 groups. Each of 45 epochs renders fresh phrasings of those training meanings and samples families evenly. Renderers compose digital/spoken clocks, clock offsets, bare hours, ordinal/list/range forms, singular/plural weekdays, task prose, alternate weeks and reordered exclusions. Six offline assistant paraphrases and their original training examples are preserved in `training/data/curated.jsonl`.
 
 Unsupported generator categories stay in training. Their ordinary words retain semantic roles where possible; unresolved restrictions receive unknown labels. Generated development contains supported requests only, so its score says nothing about rejection quality. The separate authored collection supplies ambiguous and unsupported requests.
 
@@ -30,7 +30,7 @@ The original model produced **23/120** exact authored schedules; the current mod
 
 These are **development measurements**, not untouched or real-user accuracy. Earlier results informed this iteration. “But not” is now taught, and the generated collection changed, so its current result is not an unseen-construction result. Authored texts were assistant-written separately from the generator. Original clause annotations remain under `clause`; deterministic semantic-role refinement uses neither network nor compiler output. Token accuracy cannot be directly compared with the old five-label task. The trainer does not fit authored requests, but a fresh independent collection is needed for a new generalization claim.
 
-Reports in `training/evaluation/` bind results to weights, dataset, feature encoder, compiler and WGSL hashes. Full predictions and diagnostics live in ignored `test-artifacts/cron-*-predictions.json`. Evaluation separates network output, actual compiler results and compiler results with annotated roles.
+Regenerated reports in ignored `test-artifacts/evaluation/` bind results to weights, dataset, feature encoder, compiler and WGSL hashes. Full predictions and diagnostics live in ignored `test-artifacts/cron-*-predictions.json`. Evaluation separates network output, actual compiler results and compiler results with annotated roles.
 
 ## Deployment and limitations
 

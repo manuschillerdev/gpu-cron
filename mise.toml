@@ -33,5 +33,13 @@ run = ["pnpm run build", "pnpm run build:demo"]
 [tasks."train:cron"]
 run = "pnpm run train"
 
-[tasks."benchmark:training"]
-run = "pnpm run benchmark:training"
+[tasks."check:python"]
+description = "Lint, format, and type-check Python; run any Python tests"
+dir = "training"
+run = [
+  "uv run --locked ruff check .",
+  "uv run --locked ruff format --check .",
+  "uv run --locked ty check",
+  # Pytest exits 5 when no Python tests exist; other failures must still fail.
+  'uv run --locked pytest || test "$?" -eq 5',
+]

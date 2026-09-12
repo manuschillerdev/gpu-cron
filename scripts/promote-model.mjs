@@ -13,7 +13,6 @@ for (const args of [
 
 for (const [source, destination] of [
   ['weights.json', 'src/model/weights.json'],
-  ['vocabulary.json', 'src/model/vocabulary.json'],
   ['model-fixtures.json', 'test/model-fixtures.json'],
   ['data/manifest.json', 'training/data/manifest.json'],
   ['report.json', 'training/report.json'],
@@ -21,13 +20,7 @@ for (const [source, destination] of [
     `data/${name}.jsonl`,
     `training/data/${name}.jsonl`,
   ]),
-  ...['development', 'patternHoldout', 'authoredHoldout'].map((name) => [
-    `evaluation/${name}.json`,
-    `training/evaluation/${name}.json`,
-  ]),
 ]) {
   await copyFile(`training/candidate/${source}`, destination);
 }
-console.log(
-  'Promoted candidate artifacts. Run mise run check before committing.',
-);
+console.log('Promoted candidate artifacts. Run mise run check before committing.');

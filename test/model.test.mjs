@@ -27,7 +27,7 @@ test('the shipped model matches its provenance report', async () => {
   assert.equal(MODEL_INFO.parameters, report.parameters);
   assert.equal(report.framework, 'mlx');
   assert.equal(report.device, 'gpu');
-  for (const [path, hash] of [['../training/data.py',report.dataSourceSha256],['../src/model/vocabulary.json',report.vocabularySha256],['../training/data/manifest.json',report.manifestSha256]]) {
+  for (const [path, hash] of [['../training/data.py',report.dataSourceSha256],['../training/data/manifest.json',report.manifestSha256]]) {
     assert.equal(createHash('sha256').update(await readFile(new URL(path,import.meta.url))).digest('hex'),hash);
   }
   assert.equal(createHash('sha256').update(await readFile(new URL('./model-fixtures.json', import.meta.url))).digest('hex'), report.fixturesSha256);

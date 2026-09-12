@@ -29,7 +29,7 @@ pnpm run check          # all library and browser checks
 
 The build uses the [Go-based TypeScript 7 compiler](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-rc/) (`tsgo`), pinned in the pnpm lockfile. Python checks use Ruff, ty, and pytest; currently there are no Python tests to collect. The existing JavaScript and browser suites remain the regression tests.
 
-Use `mise run check` for the complete suite or `mise run build` for the library and demo. With mise activated in your shell, the pnpm/uv commands below use the pinned tools; otherwise prefix them with `mise exec --`. `mise run setup` installs from both lockfiles without updating them. Python selection is pinned in `.python-version` and the mise `UV_PYTHON` environment setting.
+Use `mise run check` for the complete suite or `mise run build` for the library and demo. With mise activated in your shell, the pnpm/uv commands below use the pinned tools; otherwise prefix them with `mise exec --`. `mise run setup` installs from both lockfiles without updating them. Python selection follows the mise `UV_PYTHON` setting.
 
 Setup downloads the Chromium revision pinned by Playwright through `pnpm exec playwright install chromium`; tests use that managed browser with WebGPU. They fail if GPU inference is unavailable; they never count a CPU fallback as a GPU pass.
 
@@ -67,7 +67,7 @@ Options default to the current instant, **UTC**, and five preview occurrences. `
 
 Model inference requires WebGPU. Unsupported browsers and device errors produce an error; there is no CPU or automatic fallback. Results expose the WebGPU execution provider and output location. Mechanical feature preparation, predicted-value decoding, cron compilation and calendar resolution remain CPU work.
 
-Cron weights are embedded as packed signed six-bit values and expanded to float32 once during initialization. The runtime creates specialized WGSL pipelines for the fixed network, uploads weights once, and reuses input/intermediate/readback buffers, growing them when a larger batch arrives. Each instance queues calls to keep buffer reuse safe. No general model loader, operator library, WASM payload, or runtime dependency is shipped. See [architecture.md](architecture.md).
+Cron weights are embedded as packed signed six-bit values and expanded to float32 once during initialization. The runtime creates specialized WGSL pipelines for the fixed network, uploads weights once, and reuses input/intermediate/readback buffers, growing them when a larger batch arrives. Each instance queues calls to keep buffer reuse safe. No general model loader, operator library, WASM payload, or runtime dependency is shipped. See [MODEL_CARD.md](MODEL_CARD.md).
 
 `pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **31.2 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
 
@@ -111,7 +111,7 @@ mise exec -- pnpm run evaluate:cron:holdout  # evaluate the two historical holdo
 
 Reports separate token/family accuracy, exact structured schedule accuracy, ambiguous/unsupported rejection, and compiler performance given correct annotated labels. Category breakdowns distinguish model failures from compiler limitations. The browser likewise displays **What the network predicted** separately from **Compiler result**. The named holdout collections now serve as development benchmarks because prior results informed this iteration; their requests are not fitted by the trainer. The regular check task evaluates all three collections against explicit regression floors in `training/quality.json`.
 
-Offline paraphrase prompts and annotated imports use `training/paraphrases.py`; see [the protocol](training/data/README.md). No teacher model is shipped in the browser. The current six paraphrases were authored in this session, without running a separate local teacher.
+The six curated assistant paraphrases and their original training examples are stored together in `training/data/curated.jsonl`. No separate teacher was run.
 
 ## Train the tiny model
 
@@ -121,22 +121,23 @@ mise run train:cron                       # train a candidate from those files
 mise exec -- pnpm run evaluate:cron:candidate # WebGPU parity + semantic quality gate
 mise exec -- pnpm run promote:cron        # recheck, then promote candidate artifacts
 mise run check
-mise run benchmark:training
 ```
 
-Training uses locked uv dependencies, MLX and Apple Metal. Structured meanings are split before rendering, with authored meanings reserved. The generator writes annotated samples to `training/data/*.jsonl`. The trainer loads those files once, then samples families evenly from the same records each epoch; it does not generate sentences during fitting. Semantic roles identify quantities, clock values, offsets, weekdays and exclusions. Token/context dropout improves robustness, and the final 12 epochs apply six-bit fake quantization. Six offline assistant paraphrases retain frozen training parents. No teacher is shipped in the browser.
+Training uses locked uv dependencies, MLX and Apple Metal. Structured meanings are split before rendering, with authored meanings reserved. The generator writes annotated samples to `training/data/*.jsonl`. The trainer loads those files once, then samples families evenly from the same records each epoch; it does not generate sentences during fitting. Semantic roles identify quantities, clock values, offsets, weekdays and exclusions. Token/context dropout improves robustness, and the final 12 epochs apply six-bit fake quantization. Curated examples preserve their original meanings and provenance.
 
 The candidate gate requires at least 2,649/2,661 exact generated schedules, 485/489 exact pattern schedules, and 116/120 exact authored schedules, with at most seven unsupported and two ambiguous authored requests accepted. These floors prevent regressions; they do not resolve the nine known false acceptances. Dataset hashes are pinned so changing a collection requires an explicit review of its floor. Further reduction of false acceptance is still required for robust generalization.
 
-The network sums learned 24-dimensional word-hash, consonant-hash and shape embeddings, runs bidirectional affine scans, and predicts 16 semantic roles plus seven family scores. It has no word-vocabulary lookup or shared unknown-word ID. All inference operators are specialized WGSL, independent of the training framework. `src/model/vocabulary.json` is only a training-word audit artifact.
+The network sums learned 24-dimensional word-hash, consonant-hash and shape embeddings, runs bidirectional affine scans, and predicts 16 semantic roles plus seven family scores. It has no word-vocabulary lookup or shared unknown-word ID. All inference operators are specialized WGSL, independent of the training framework.
 
 The shipped model's recorded M2 Max run took 107.5 seconds for 45 epochs using the earlier pipeline that regenerated phrasings each epoch. New runs train from the fixed JSONL corpus; that historical timing and accuracy do not measure the new training workflow. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`.
 
-Actual WebGPU evaluation now produces **116/120 exact authored schedules**, versus the original 23/120. The compiler produces 120/120 with annotated roles, versus 29/120. **9/80 unsupported or ambiguous authored requests are still incorrectly accepted.** These are development results on assistant-authored requests, not broad real-user accuracy. Old token scores are not directly comparable because the label vocabulary changed. See [MODEL_CARD.md](MODEL_CARD.md) and [the data protocol](training/data/README.md).
+Actual WebGPU evaluation now produces **116/120 exact authored schedules**, versus the original 23/120. The compiler produces 120/120 with annotated roles, versus 29/120. **9/80 unsupported or ambiguous authored requests are still incorrectly accepted.** These are development results on assistant-authored requests, not broad real-user accuracy. Old token scores are not directly comparable because the label vocabulary changed. See [MODEL_CARD.md](MODEL_CARD.md).
+
+Each JSONL line is one annotated object: `text`, `family`, canonical `groupId`, token offsets and semantic roles, structured `target`, and source/provenance. `clause` retains the original coarse annotation; `annotationVersion: 2` identifies semantic-role refinement. The generator assigns meanings to disjoint splits before rendering, so paraphrases stay together. `authored.jsonl` and `curated.jsonl` are versioned source data; the larger generated splits are reproducible and ignored.
 
 Inspect or edit `training/data/train.jsonl` before training. Labels are read as stored, with token-offset, role, family, and split-leakage validation. `--data-dir PATH` selects another directory containing `train.jsonl`, `development.jsonl`, `patternHoldout.jsonl`, and `authored.jsonl`. Training snapshots the loaded records under `training/candidate/data/` for later evaluation and resume identity. Checks and evaluation never regenerate these inputs. Rerunning `prepare:cron-data` intentionally replaces generated data, so keep any curated edits elsewhere first.
 
-Evaluation reports normally go to ignored `test-artifacts/evaluation/`; pass `--write` directly to `scripts/evaluate-cron.mjs` to refresh committed reports. Candidate reports stay alongside the candidate. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
+Evaluation reports go to ignored `test-artifacts/evaluation/`. Candidate reports stay alongside the candidate. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
 
 ## Source map
 
@@ -154,6 +155,6 @@ MIT licensed. Inspired by the small-model approach in [gpu-time](https://github.
 
 ## Dependency maintenance
 
-Use `mise exec -- pnpm add <package>` for JavaScript dependencies and `mise exec -- uv add --project training <package>` for Python dependencies. Commit the corresponding lockfile with manifest changes. Tool versions belong in `mise.toml`; keep Node requirements, `packageManager`, `.python-version` and `UV_PYTHON` consistent with those pins.
+Use `mise exec -- pnpm add <package>` for JavaScript dependencies and `mise exec -- uv add --project training <package>` for Python dependencies. Commit the corresponding lockfile with manifest changes. Tool versions belong in `mise.toml`; keep Node requirements, `packageManager` and `UV_PYTHON` consistent with those pins.
 
 `mise run train:cron` writes packed weights, MLX fixtures, data identity, and a report to ignored `training/candidate/`. It never replaces shipped artifacts. `promote:cron` reruns actual WebGPU/MLX parity and exact-schedule/rejection evaluation and the complete-bundle size budget before copying the candidate into the project.

@@ -29,7 +29,6 @@ from data import (
     load_datasets,
     row,
     write_manifest,
-    write_vocabulary,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -347,7 +346,6 @@ def main():
     manifest = write_manifest(
         sets, CANDIDATE / "data"
     )  # Snapshot the loaded records and split identity before fitting.
-    vocabulary_size = write_vocabulary(sets["train"], CANDIDATE / "vocabulary.json")
     model, train_seconds, training_examples = fit(
         sets, manifest, args.epochs, args.resume
     )
@@ -389,8 +387,6 @@ def main():
         "trainingExamples": training_examples,
         "trainingSeconds": train_seconds,
         "dataVersion": VERSION,
-        "vocabularySize": vocabulary_size,
-        "vocabularySha256": sha(CANDIDATE / "vocabulary.json"),
         "dataSourceSha256": sha(ROOT / "training/data.py"),
         "trainingSourceSha256": sha(Path(__file__)),
         "weightsSha256": sha(CANDIDATE / "weights.json"),

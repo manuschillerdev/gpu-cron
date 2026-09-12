@@ -71,7 +71,6 @@ NUMBERS = [
     "twenty",
 ]
 DATA = Path(__file__).resolve().parent / "data"
-VOCABULARY = DATA.parents[1] / "src/model/vocabulary.json"
 
 
 def tokens(text):
@@ -97,13 +96,6 @@ def token_id(text):
         + ((word_hash(re.sub("[aeiou]", "", word)) & 255) << 10)
         + (shape << 18)
     )
-
-
-def write_vocabulary(training, path=VOCABULARY):
-    # Kept as a provenance artifact; the runtime uses feature hashes, no word lookup.
-    words = sorted({t[0].lower() for item in training for t in tokens(item["text"])})
-    path.write_text(json.dumps(words, ensure_ascii=False, separators=(",", ":")) + "\n")
-    return len(words)
 
 
 def features(text, length=MAX_TOKENS):
@@ -962,42 +954,22 @@ def datasets():
             )
             item["split"] = split
             result[split].append(item)
-    # Every latent meaning belongs to one split, including external paraphrases.
-    proposals = DATA / "paraphrases.jsonl"
-    frozen_parents = DATA / "paraphrase-parents.jsonl"
-    if frozen_parents.exists():
-        present = {r["id"] for r in result["train"]}
-        for line in frozen_parents.read_text().splitlines():
-            if not line.strip():
-                continue
-            parent = semantic_labels(json.loads(line))
-            group = group_id(parent["target"])
-            if (
-                group != parent["groupId"]
-                or group in reserved
-                or int(group[:8], 16) % 10 >= 8
-            ):
-                raise ValueError(
-                    "Frozen teacher parent must belong to a training meaning"
-                )
-            if parent["id"] not in present:
-                result["train"].append(parent)
-    if proposals.exists():
-        parents = {r["id"]: r for r in result["train"]}
-        for line in proposals.read_text().splitlines():
-            if not line.strip():
-                continue
-            item = semantic_labels(json.loads(line))
-            parent = parents.get(item["parentId"])
-            if (
-                parent is None
-                or item["target"] != parent["target"]
-                or item["groupId"] != parent["groupId"]
-            ):
-                raise ValueError(
-                    "Paraphrase must inherit a training parent meaning and split"
-                )
+    # A small curated supplement; no teacher/import pipeline is needed.
+    present = {r["id"] for r in result["train"]}
+    for line in (DATA / "curated.jsonl").read_text().splitlines():
+        if not line.strip():
+            continue
+        item = semantic_labels(json.loads(line))
+        group = group_id(item["target"])
+        if (
+            group != item["groupId"]
+            or group in reserved
+            or int(group[:8], 16) % 10 >= 8
+        ):
+            raise ValueError("Curated example must belong to a training meaning")
+        if item["id"] not in present:
             result["train"].append(item)
+            present.add(item["id"])
     owners = {}
     for split, items in result.items():
         for item in items:
@@ -1005,13 +977,6 @@ def datasets():
             if old != split:
                 raise ValueError(f"Meaning leaks between {old} and {split}")
     return result
-
-
-def corpus(seed, count, heldout=False):
-    items = load_datasets()["development" if heldout else "train"]
-    rng = random.Random(seed)
-    rng.shuffle(items)
-    return [row(r) for r in items[:count]]
 
 
 def load_datasets(directory=DATA):

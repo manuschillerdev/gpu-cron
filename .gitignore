@@ -6,14 +6,12 @@ training/candidate/
 .ruff_cache/
 .pytest_cache/
 training/__pycache__/
-training/checkpoint.pt
 training/checkpoint.safetensors
 training/optimizer.safetensors
 training/progress.json
 training/data/train.jsonl
 training/data/development.jsonl
 training/data/patternHoldout.jsonl
-training/hardware-benchmark.local.json
 test-artifacts/
 .DS_Store
 .idea/

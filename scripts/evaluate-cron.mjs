@@ -15,12 +15,7 @@ const names = check
 const directory = candidate ? 'training/candidate' : 'training';
 const dataDirectory = directory + '/data';
 const weightsPath = candidate ? directory + '/weights.json' : 'src/model/weights.json';
-const vocabularyPath = candidate ? directory + '/vocabulary.json' : 'src/model/vocabulary.json';
-const reportDirectory = candidate
-  ? directory + '/evaluation'
-  : process.argv.includes('--write')
-    ? 'training/evaluation'
-    : 'test-artifacts/evaluation';
+const reportDirectory = candidate ? directory + '/evaluation' : 'test-artifacts/evaluation';
 const quality = JSON.parse(await readFile('training/quality.json', 'utf8'));
 const failures = [];
 const server = await createServer({
@@ -45,7 +40,6 @@ try {
   const training = JSON.parse(await readFile(directory + '/report.json', 'utf8'));
   if (
     sha(await readFile(dataDirectory + '/manifest.json')) !== training.manifestSha256 ||
-    sha(await readFile(vocabularyPath)) !== training.vocabularySha256 ||
     sha(await readFile(weightsPath)) !== training.weightsSha256
   )
     throw new Error(
@@ -249,7 +243,6 @@ try {
       featuresSha256: sha(await readFile('src/features.ts')),
       runtimeSha256: sha(await readFile('src/model/runtime.ts')),
       weightsSha256: sha(await readFile(weightsPath)),
-      vocabularySha256: training.vocabularySha256,
       manifestSha256: sha(await readFile(dataDirectory + '/manifest.json')),
       evaluationUse:
         'Development: prior results informed this iteration; these are not untouched holdouts.',

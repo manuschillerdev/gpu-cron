@@ -6,7 +6,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "lib": ["ES2022", "DOM"],
-    "types": ["@webgpu/types"],
+    "types": ["@webgpu/types", "vite/client"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true
