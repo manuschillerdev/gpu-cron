@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f5ee" />
+    <meta name="description" content="Turn recurring schedules into cron expressions. A tiny local model, an exact calendar, and nothing sent to a server." />
+    <title>gpu-cron — Schedules, in your words.</title>
+  </head>
+  <body>
+    <div class="shell">
+      <header><a class="brand" href="/" aria-label="gpu-cron home"><span class="brand-icon">✳</span> gpu-cron<span class="version">/ 0.1</span></a></header>
+      <main>
+        <div class="eyebrow">SMALL MODEL. EXACT CLOCK.</div>
+        <h1>Schedules,<br /><span>in your words.</span></h1>
+        <p class="intro">Write when it should happen.<br class="mobile-break" /> Get the cron expression—and see what happens next.</p>
+        <section class="workspace" aria-label="Schedule playground">
+          <div class="editor">
+            <div class="section-top"><label for="expression">01 <span>YOUR SCHEDULE</span></label><span id="status" role="status">Ready</span></div>
+            <textarea id="expression" spellcheck="false" maxlength="512" rows="3">Every weekday at 9:30am</textarea>
+            <div class="examples" aria-label="Try an example">
+              <button data-example="Every weekday at 9:30am">Weekday mornings</button>
+              <button data-example="Every 15 minutes">Every 15 minutes</button>
+              <button data-example="Every weekday at half past eight in the morning">Spoken time</button>
+              <button data-example="Daily at nine am but not during January">Month exclusion</button>
+              <button data-example="Every other Friday at 4pm except in December">Alternate Fridays ↗</button>
+              <button data-example="On the last day of every month at noon">Month’s end ↗</button>
+            </div>
+            <section class="network-output" aria-label="Network predictions">
+              <h2>What the network predicted</h2>
+              <p id="network-status">Waiting for inference…</p>
+              <div id="network-tokens"></div>
+            </section>
+            <div class="options">
+              <label>TIMEZONE<select id="timezone"><option>UTC</option><option selected>Europe/Berlin</option><option>America/New_York</option><option>Asia/Kolkata</option><option>Asia/Tokyo</option><option>Australia/Sydney</option></select></label>
+
+            </div>
+            <details class="reference"><summary>Preview from a specific instant</summary><label for="reference">Reference instant (ISO, with offset)</label><input id="reference" type="text" spellcheck="false" /></details>
+          </div>
+          <div class="result" aria-live="polite" aria-busy="false">
+            <div class="section-top"><span>02 <span>THE EXPRESSION</span></span><button class="copy" id="copy" disabled>Copy cron <span>↗</span></button></div>
+            <div class="cron-fields" id="cron-fields">
+              <div><strong>—</strong><small>MINUTE</small></div><div><strong>—</strong><small>HOUR</small></div><div><strong>—</strong><small>DAY</small></div><div><strong>—</strong><small>MONTH</small></div><div><strong>—</strong><small>WEEKDAY</small></div>
+            </div>
+            <p id="description" class="description">Reading your schedule…</p>
+            <h2 class="compiler-heading">Compiler result</h2>
+            <p id="compiler-status" class="description">Waiting for model predictions…</p>
+            <div id="diagnostics"></div>
+            <div class="preview-heading"><h2>Next occurrences</h2><span id="preview-zone">LOCAL TIME</span></div>
+            <ol id="occurrences"></ol>
+            <details class="structured"><summary>Inspect the structured result <span>+</span></summary><pre id="json"></pre></details>
+          </div>
+        </section>
+        <section class="notes" aria-label="How it works"><div><span>01 / RECOGNIZE</span><p>A tiny neural model reads context in both directions to identify recurrence, time and exclusions.</p></div><div><span>02 / RESOLVE</span><p>Calendar code handles dates, timezones, and daylight saving.</p></div><div><span>03 / BE EXACT</span><p>If cron can’t express it faithfully, you’ll see why.</p></div></section>
+      </main>
+      <footer><span>gpu-cron <span class="footer-muted">· an experiment in small, useful models</span></span><span>35,783 parameters <b>·</b> WebGPU · 6-bit weights</span></footer>
+    </div>
+    <script type="module" src="/demo/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,55 @@
+{
+  "name": "gpu-cron",
+  "version": "0.1.0",
+  "description": "Tiny MLX-trained schedule model with a dependency-free WebGPU runtime",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "MODEL_CARD.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22",
+    "pnpm": "10.32.1"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "node scripts/clean-build.mjs && tsc -p tsconfig.build.json",
+    "build:demo": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run build && node --test test/*.test.mjs",
+    "test:browser": "pnpm run build && node scripts/browser-test.mjs",
+    "train": "uv run --locked --project training python training/train.py && uv run --locked --project training python training/export_onnx.py",
+    "benchmark:training": "uv run --locked --project training python training/benchmark.py",
+    "prepare:cron-data": "uv run --locked --project training python training/data.py",
+    "evaluate:cron": "pnpm run prepare:cron-data && pnpm run build && node scripts/evaluate-cron.mjs",
+    "evaluate:cron:holdout": "pnpm run prepare:cron-data && pnpm run build && node scripts/evaluate-cron.mjs --holdout",
+    "size": "pnpm run build && node scripts/size.mjs",
+    "check": "pnpm run typecheck && pnpm test && pnpm run build:demo && pnpm run test:production && pnpm run test:browser && pnpm run size",
+    "export:onnx": "uv run --locked --project training python training/export_onnx.py",
+    "test:production": "node scripts/production-test.mjs"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.69",
+    "playwright": "^1.58.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "onnxruntime-web": "^1.29.0"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manuschillerdev/gpu-cron.git"
+  },
+  "homepage": "https://github.com/manuschillerdev/gpu-cron#readme",
+  "bugs": {
+    "url": "https://github.com/manuschillerdev/gpu-cron/issues"
+  }
+}

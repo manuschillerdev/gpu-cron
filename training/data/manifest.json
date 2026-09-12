@@ -1,0 +1,31 @@
+{
+  "version": 12,
+  "seed": 7319,
+  "splits": {
+    "train": {
+      "examples": 23177,
+      "meaningGroups": 6819,
+      "sha256": "6d20250bba9c4cf3626796ad6928ce1944fbae9185c153a5df391ef9982d7f36"
+    },
+    "development": {
+      "examples": 2661,
+      "meaningGroups": 830,
+      "sha256": "2e38514e2d7b5937e68e158ff369d061a4f0eaef87ae703fdea4f0b66ba835e6"
+    },
+    "patternHoldout": {
+      "examples": 489,
+      "meaningGroups": 489,
+      "sha256": "248bf86e7e838d42d0f3569a4c5936524fa2ae9411d81d4dd630452dc513b4ef"
+    },
+    "authoredHoldout": {
+      "examples": 200,
+      "meaningGroups": 139,
+      "sha256": "355742c7a05cdd1e478a202b4d23eae9b1a9ceeb7d616a0f4d805c9947651153"
+    }
+  },
+  "grouping": "Canonical structured meaning before rendering; authored meanings reserved from generated splits.",
+  "heldoutPattern": "Former but-not holdout is now a meaning-disjoint development stress set; the construction is taught in training.",
+  "authoredProvenance": "Assistant-authored and annotated separately from the renderer, not real-user traffic. Texts and targets are never used by trainer. Previously inspected results informed this iteration; this is development evaluation.",
+  "negativeGroups": "Unsupported generator categories all stay in training; authored evaluation supplies separate unsupported/ambiguous requests. Generated development contains supported meanings only.",
+  "policy": "The named holdout files are now development benchmarks, evaluated outside the trainer. Do not claim untouched generalization from them. A fresh collection is needed for a fresh generalization claim."
+}
