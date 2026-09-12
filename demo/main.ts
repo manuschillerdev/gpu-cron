@@ -8,7 +8,7 @@ const timezone = get<HTMLSelectElement>('timezone');
 const reference = get<HTMLInputElement>('reference');
 const copy = get<HTMLButtonElement>('copy');
 reference.value = new Date().toISOString();
-const parser = defineParser({});
+const parser = defineParser();
 let revision = 0;
 let result: ParseResult | null = null;
 let timer: ReturnType<typeof setTimeout>;

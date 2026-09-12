@@ -32,17 +32,22 @@ Reports in `training/evaluation/` bind results to weights, dataset, feature enco
 
 ## Deployment and limitations
 
-Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 60,221 bytes, or **31,595 bytes (30.9 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
+Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 62,194 bytes, or **31,898 bytes (31.2 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
 
 The runtime reuses the device, pipelines, weights and buffers, queues calls and chunks batches at 128. Inputs retain the 512-character limit; training uses a 64-token bucket. Long-input and multilingual generalization are unmeasured. Six-bit quantization and platform differences are checked against MLX and the optional ONNX verification graph using the existing fixtures and real Chromium WebGPU. No new regression cases were added.
 
 ONNX remains a development-only portable export (175,307 bytes). No ONNX, WASM loader or runtime dependency ships in the browser.
 
+## Candidate promotion
+
+Training now produces isolated candidate artifacts. Promotion requires fresh WebGPU/MLX parity, the complete-bundle size budget, and the mixed development regression floors in `training/quality.json`. The floors retain the recorded 116/120 authored supported schedules and at most 9/80 false acceptances; they prevent regression and do not claim to solve those remaining failures. Shipped coefficients and fixtures were not regenerated for the pipeline refactor. Original source hashes remain in the reports under `sourceMaintenance`.
+
 ## Reproduce
 
 ```sh
 mise run train:cron
-mise exec -- pnpm run evaluate:cron
-mise exec -- pnpm run evaluate:cron:holdout
+mise exec -- pnpm run evaluate:cron:candidate
+mise exec -- pnpm run promote:cron
+mise exec -- pnpm run export:onnx
 mise run check
 ```

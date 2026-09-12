@@ -2,6 +2,9 @@ node_modules/
 dist/
 site/
 training/.venv/
+training/candidate/
+.ruff_cache/
+.pytest_cache/
 training/__pycache__/
 training/checkpoint.pt
 training/checkpoint.safetensors

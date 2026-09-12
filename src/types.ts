@@ -1,8 +1,14 @@
-export type Backend = 'webgpu';
 export type Family = 'minutes' | 'hours' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'invalid';
 
 export interface Diagnostic {
-  code: 'invalid-input' | 'unsupported-syntax' | 'low-confidence' | 'invalid-value' | 'not-cron' | 'assumption' | 'preview-limit';
+  code:
+    | 'invalid-input'
+    | 'unsupported-syntax'
+    | 'low-confidence'
+    | 'invalid-value'
+    | 'not-cron'
+    | 'assumption'
+    | 'preview-limit';
   severity: 'error' | 'warning' | 'info';
   message: string;
 }
@@ -40,7 +46,14 @@ export interface ParseResult {
   description: string | null;
   occurrences: string[];
   diagnostics: Diagnostic[];
-  model: { family: Family; confidence: number; tokens: import('./model/parameters.js').TokenPrediction[]; backend: 'webgpu'; executionProvider: 'webgpu'; outputLocations: string[] };
+  model: {
+    family: Family;
+    confidence: number;
+    tokens: import('./model/parameters.js').TokenPrediction[];
+    backend: 'webgpu';
+    executionProvider: 'webgpu';
+    outputLocations: string[];
+  };
 }
 
 export interface Parser {

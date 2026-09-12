@@ -26,6 +26,8 @@ pnpm run size           # bundled/minified/Brotli bytes; 40,000-byte budget
 pnpm run check          # all library and browser checks
 ```
 
+The build uses the [Go-based TypeScript 7 compiler](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0-rc/) (`tsgo`), pinned in the pnpm lockfile. Python checks use Ruff, ty, and pytest; currently there are no Python tests to collect. The existing JavaScript and browser suites remain the regression tests.
+
 Use `mise run check` for the complete suite or `mise run build` for the library and demo. With mise activated in your shell, the pnpm/uv commands below use the pinned tools; otherwise prefix them with `mise exec --`. `mise run setup` installs from both lockfiles without updating them. Python selection is pinned in `.python-version` and the mise `UV_PYTHON` environment setting.
 
 Setup downloads the Chromium revision pinned by Playwright through `pnpm exec playwright install chromium`; tests use that managed browser with WebGPU. They fail if GPU inference is unavailable; they never count a CPU fallback as a GPU pass.
@@ -50,7 +52,7 @@ result.description;
 result.diagnostics;
 result.model;       // predicted family, raw token spans/labels/scores, actual inference backend
 
-const parser = defineParser({ backend: 'webgpu' });
+const parser = defineParser();
 try {
   const batch = await parser.parseMany(['every 15 minutes', 'daily at noon'], {
     timeZone: 'UTC', count: 0,
@@ -66,7 +68,7 @@ Model inference requires WebGPU. Unsupported browsers and device errors produce 
 
 Cron weights are embedded as packed signed six-bit values and expanded to float32 once during initialization. The runtime creates specialized WGSL pipelines for the fixed network, uploads weights once, and reuses input/intermediate/readback buffers, growing them when a larger batch arrives. Each instance queues calls to keep buffer reuse safe. No general model loader, operator library, WASM payload, or runtime dependency is shipped. See [architecture.md](architecture.md).
 
-`pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **30.9 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
+`pnpm run size` measures the complete standalone library, including packed weights, feature processing, decoding, and WGSL runtime. The complete library is **31.2 KiB** with Brotli compression. Demo HTML/CSS are separate. These are compressed download sizes, not GPU-memory sizes.
 
 ## Supported language
 
@@ -87,7 +89,7 @@ Variations include spoken clocks ("quarter to seven in the evening"), digital cl
 ## Exactness and calendar policy
 
 - Cron is **five fields**: minute, hour, day of month, month, weekday. It contains neither a timezone nor a command. Configure your scheduler's timezone separately to match `result.schedule.timeZone`.
-- Minute/hour intervals align to the wall-clock field boundary. Only divisors of 60 or 24 are accepted; `every 7 minutes` is rejected because `*/7` resets each hour and would not preserve seven-minute spacing.
+- Minute/hour intervals align to the wall-clock field boundary. Intervals with included weekday restrictions are currently rejected rather than dropped. Only divisors of 60 or 24 are accepted; `every 7 minutes` is rejected because `*/7` resets each hour and would not preserve seven-minute spacing.
 - Bare `at 4` means **04:00** and produces an explicit assumption diagnostic. Use `4pm` for 16:00.
 - Alternate weeks use Monday-based local weeks anchored to the reference's week. Preserve `schedule.anchorWeek` to retain that phase; changing the reference on a new parse can change the phase.
 - Month exclusions do not reset the alternate-week phase.
@@ -106,25 +108,32 @@ mise exec -- pnpm run evaluate:cron          # development only, actual WebGPU
 mise exec -- pnpm run evaluate:cron:holdout  # evaluate the two historical holdout collections
 ```
 
-Reports separate token/family accuracy, exact structured schedule accuracy, ambiguous/unsupported rejection, and compiler performance given correct annotated labels. Category breakdowns distinguish model failures from compiler limitations. The browser likewise displays **What the network predicted** separately from **Compiler result**. The named holdout collections now serve as development benchmarks because prior results informed this iteration; their requests are not fitted by the trainer or run in the regular check task.
+Reports separate token/family accuracy, exact structured schedule accuracy, ambiguous/unsupported rejection, and compiler performance given correct annotated labels. Category breakdowns distinguish model failures from compiler limitations. The browser likewise displays **What the network predicted** separately from **Compiler result**. The named holdout collections now serve as development benchmarks because prior results informed this iteration; their requests are not fitted by the trainer. The regular check task evaluates all three collections against explicit regression floors in `training/quality.json`.
 
 Offline paraphrase prompts and annotated imports use `training/paraphrases.py`; see [the protocol](training/data/README.md). No teacher model is shipped in the browser. The current six paraphrases were authored in this session, without running a separate local teacher.
 
 ## Train the tiny model
 
 ```sh
-mise run train:cron          # train with MLX, then export ONNX
-mise run benchmark:training  # synchronized compiled MLX GPU epochs
+mise run train:cron                       # train an isolated MLX candidate
+mise exec -- pnpm run evaluate:cron:candidate # WebGPU parity + semantic quality gate
+mise exec -- pnpm run promote:cron        # recheck, then promote candidate artifacts
+mise exec -- pnpm run export:onnx         # refresh optional verification graph
 mise run check
+mise run benchmark:training
 ```
 
 Training uses locked uv dependencies, MLX and Apple Metal. Structured meanings are split before rendering, with authored meanings reserved. Every epoch generates fresh composable phrasings; families are sampled evenly. Semantic roles identify quantities, clock values, offsets, weekdays and exclusions. Token/context dropout improves robustness, and the final 12 epochs apply six-bit fake quantization. Six offline assistant paraphrases retain frozen training parents. No teacher is shipped in the browser.
 
+The candidate gate requires at least 2,649/2,661 exact generated schedules, 485/489 exact pattern schedules, and 116/120 exact authored schedules, with at most seven unsupported and two ambiguous authored requests accepted. These floors prevent regressions; they do not resolve the nine known false acceptances. Dataset hashes are pinned so changing a collection requires an explicit review of its floor. Further reduction of false acceptance is still required for robust generalization.
+
 The network sums learned 24-dimensional word-hash, consonant-hash and shape embeddings, runs bidirectional affine scans, and predicts 16 semantic roles plus seven family scores. It has no word-vocabulary lookup or shared unknown-word ID. All inference operators are specialized WGSL, independent of the training framework. `src/model/vocabulary.json` is only a training-word audit artifact.
 
-The recorded M2 Max run took 107.5 seconds for 45 epochs, regenerating 23,177 training records per epoch. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`. The subsequent ONNX export verifies the exact shipped coefficients; it is not imported by the browser. `mise exec -- pnpm run export:onnx` exports existing weights without retraining.
+The recorded M2 Max run took 107.5 seconds for 45 epochs, regenerating 23,177 training records per epoch. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`. The separate ONNX export verifies the exact shipped coefficients; it is not imported by the browser. `mise exec -- pnpm run export:onnx` exports existing weights without retraining.
 
 Actual WebGPU evaluation now produces **116/120 exact authored schedules**, versus the original 23/120. The compiler produces 120/120 with annotated roles, versus 29/120. **9/80 unsupported or ambiguous authored requests are still incorrectly accepted.** These are development results on assistant-authored requests, not broad real-user accuracy. Old token scores are not directly comparable because the label vocabulary changed. See [MODEL_CARD.md](MODEL_CARD.md) and [the data protocol](training/data/README.md).
+
+Evaluation reports normally go to ignored `test-artifacts/evaluation/`; pass `--write` directly to `scripts/evaluate-cron.mjs` to refresh committed reports. Candidate reports stay alongside the candidate. Historical training and export source hashes are preserved in the provenance reports under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
 
 ## Source map
 
@@ -145,4 +154,4 @@ MIT licensed. Inspired by the small-model approach in [gpu-time](https://github.
 
 Use `mise exec -- pnpm add <package>` for JavaScript dependencies and `mise exec -- uv add --project training <package>` for Python dependencies. Commit the corresponding lockfile with manifest changes. Tool versions belong in `mise.toml`; keep Node requirements, `packageManager`, `.python-version` and `UV_PYTHON` consistent with those pins.
 
-`mise run train:cron` trains with MLX on Apple Metal and exports packed weights plus the ONNX verification graph.
+`mise run train:cron` writes packed weights, MLX fixtures, data identity, and a report to ignored `training/candidate/`. It never replaces shipped artifacts. `promote:cron` reruns actual WebGPU/MLX parity and exact-schedule/rejection evaluation and the complete-bundle size budget before copying the candidate into the project. ONNX is an optional uv verification group, installed only by checks that need it and the separate export command.

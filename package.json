@@ -21,27 +21,32 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "node scripts/clean-build.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/clean-build.mjs && tsgo -p tsconfig.build.json",
     "build:demo": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "pnpm run build && node --test test/*.test.mjs",
     "test:browser": "pnpm run build && node scripts/browser-test.mjs",
-    "train": "uv run --locked --project training python training/train.py && uv run --locked --project training python training/export_onnx.py",
+    "train": "uv run --locked --project training python training/train.py",
     "benchmark:training": "uv run --locked --project training python training/benchmark.py",
     "prepare:cron-data": "uv run --locked --project training python training/data.py",
     "evaluate:cron": "pnpm run prepare:cron-data && pnpm run build && node scripts/evaluate-cron.mjs",
     "evaluate:cron:holdout": "pnpm run prepare:cron-data && pnpm run build && node scripts/evaluate-cron.mjs --holdout",
     "size": "pnpm run build && node scripts/size.mjs",
-    "check": "pnpm run typecheck && pnpm test && pnpm run build:demo && pnpm run test:production && pnpm run test:browser && pnpm run size",
-    "export:onnx": "uv run --locked --project training python training/export_onnx.py",
-    "test:production": "node scripts/production-test.mjs"
+    "check": "pnpm run check:python && pnpm run typecheck && pnpm run build && node --test test/*.test.mjs && pnpm run build:demo && pnpm run test:production && node scripts/browser-test.mjs && pnpm run prepare:cron-data && node scripts/evaluate-cron.mjs --check && node scripts/size.mjs",
+    "export:onnx": "uv run --locked --project training --group verification python training/export_onnx.py",
+    "test:production": "node scripts/production-test.mjs",
+    "evaluate:cron:candidate": "node scripts/evaluate-cron.mjs --candidate --check",
+    "promote:cron": "node scripts/promote-model.mjs",
+    "check:python": "node scripts/check-python.mjs",
+    "format": "prettier --write 'src/**/*.ts' scripts/evaluate-cron.mjs scripts/promote-model.mjs scripts/check-python.mjs scripts/size.mjs && uv run --locked --project training ruff format training"
   },
   "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@webgpu/types": "^0.1.69",
+    "onnxruntime-web": "^1.29.0",
     "playwright": "^1.58.2",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "onnxruntime-web": "^1.29.0"
+    "prettier": "3.9.6",
+    "vite": "^7.3.1"
   },
   "packageManager": "pnpm@10.32.1",
   "repository": {

@@ -15,9 +15,11 @@ Each epoch uses a deterministic surface seed and fresh phrasings of the training
 ```sh
 mise exec -- pnpm run prepare:cron-data
 mise run train:cron
+mise exec -- pnpm run evaluate:cron:candidate
+mise exec -- pnpm run promote:cron
 ```
 
-The generated JSONL files are ignored by git and reproducible. The authored collection, six offline assistant paraphrases, frozen parents, generator and manifest are versioned. Training samples families evenly, applies 8% token embedding dropout and 10% context dropout and uses six-bit fake quantization in the final 12 epochs. Augmentation is disabled for evaluation/export.
+Training writes a candidate manifest, data, weights, and fixtures under ignored `training/candidate/`. Promotion reruns WebGPU/MLX parity, exact-schedule and rejection floors, and the complete-bundle size budget before replacing shipped artifacts. The generated JSONL files are ignored by git and reproducible. The authored collection, six offline assistant paraphrases, frozen parents, generator and manifest are versioned. Training samples families evenly, applies 8% token embedding dropout and 10% context dropout and uses six-bit fake quantization in the final 12 epochs. Augmentation is disabled for evaluation/export.
 
 ## Offline paraphrases
 
@@ -43,4 +45,4 @@ Actual WebGPU inference is measured separately from compilation. Reports include
 
 Exact comparison uses minutes, hours, month days, weekdays, months and week interval, fixing timezone/reference externally and excluding redundant family labels. Authored exact schedule accuracy remains comparable with the original 23/120 baseline. Token accuracy does not: the task changed from five coarse labels to 16 semantic roles. Generated datasets also changed, so do not describe their before/after totals as the same examples.
 
-Summary reports live in `training/evaluation/`; full predictions and diagnostics are in ignored `test-artifacts/cron-*-predictions.json`. The evaluator checks weights, manifest and audit-vocabulary hashes against the training report. No new regression tests were added for this iteration.
+Historical summary reports live in `training/evaluation/`. New reports default to ignored `test-artifacts/evaluation/` (use the evaluator's `--write` flag to refresh committed reports); candidate reports stay in `training/candidate/evaluation/`. The regular check task enforces the floors in `training/quality.json` across all three collections; full predictions and diagnostics are in ignored `test-artifacts/cron-*-predictions.json`. The evaluator checks weights, manifest and audit-vocabulary hashes against the training report. No new regression tests were added for this iteration.
