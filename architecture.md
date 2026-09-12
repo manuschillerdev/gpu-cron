@@ -1,6 +1,6 @@
 # Training and deployment
 
-The cron model trains in MLX on Apple Metal. Browser deployment uses specialized WGSL and embedded packed weights, with no ONNX loader, runtime dependencies or CPU inference fallback.
+The cron model trains in MLX on Apple Metal. Browser deployment uses specialized WGSL and embedded packed weights, with no runtime dependencies or CPU inference fallback.
 
 CPU preparation mechanically tokenizes text and extracts word/shape features. The GPU runs learned embeddings, bidirectional scans, semantic-role predictions and family scores. CPU decoding interprets the predicted values and resolves calendar arithmetic.
 
@@ -18,7 +18,7 @@ The browser performs no semantic interpretation before inference. The compiler r
 
 `training/data.py` generates meaning first and renders language independently of the runtime compiler. Positive meanings are assigned to disjoint splits before rendering; all authored supported meanings remain reserved. Data preparation renders the meanings to annotated JSONL files. Training loads those files once and resamples batches from the fixed records each epoch, without rendering new text. Variations compose spoken/digital clocks, ranges, lists, singular/plural weekdays, ordinals, alternate weeks, task prefixes, punctuation, clause order and exclusions. Unsupported generator categories stay in training, with separate authored unsupported requests providing development evaluation.
 
-MLX uses compiled autodiff, AdamW, gradient clipping, warmup/cosine decay and token embedding dropout. Only the final 12 epochs apply deployment-matched six-bit fake quantization. Model, optimizer, RNG and split identity are checkpointed; resumed epochs regenerate their own deterministic data. No augmentation is applied during export or inference. Input JSONL is validated without regenerating text or labels; a snapshot of the loaded records is written beside the candidate. The trainer writes artifacts to `training/candidate/` (resume checkpoints remain under `training/`); the separate promotion command reruns WebGPU/MLX parity and exact-schedule/rejection regression floors on all three development collections and the complete-bundle size budget before copying artifacts. ONNX export is an optional verification step after promotion.
+MLX uses compiled autodiff, AdamW, gradient clipping, warmup/cosine decay and token embedding dropout. Only the final 12 epochs apply deployment-matched six-bit fake quantization. Model, optimizer, RNG and split identity are checkpointed; resumed epochs reuse the same validated JSONL dataset. No augmentation is applied during export or inference. Input JSONL is validated without regenerating text or labels; a snapshot of the loaded records is written beside the candidate. The trainer writes artifacts to `training/candidate/` (resume checkpoints remain under `training/`); the separate promotion command reruns WebGPU/MLX parity and exact-schedule/rejection regression floors on all three development collections and the complete-bundle size budget before copying artifacts.
 
 The existing authored collection and former “but not” holdout have informed development. They are no longer untouched benchmarks, and “but not” is now taught. Their requests are not fitted by the trainer. The authored texts and schedule targets remain unchanged; old clause annotations were refined into semantic roles without using model predictions or compiler outputs. Token scores therefore cannot be directly compared with the old five-label task. Exact schedule accuracy still compares the same authored targets. See [MODEL_CARD.md](MODEL_CARD.md) for actual WebGPU measurements.
 
@@ -26,9 +26,9 @@ The existing authored collection and former “but not” holdout have informed 
 
 `src/model/runtime.ts` specializes embedding/gating, scan composition, projection, token classification and family pooling in WGSL. It reuses devices, pipelines, weights, buffers and bind groups. Calls are queued with input snapshots; capacity grows geometrically and batches are chunked at 128. Inputs have 512 padded slots, while dispatch uses the next power of two covering actual tokens. Device loss is an error.
 
-The signed six-bit weights occupy 26,838 packed bytes and expand to 143,132 float32 bytes. ONNX describes the same decoded coefficients and complete graph solely for development verification. Numerical references are not imported by deployed entrypoints. Existing checks compare MLX, ONNX and real Chromium WebGPU, including buffer lifecycle and concurrent calls.
+The signed six-bit weights occupy 26,838 packed bytes and expand to 143,132 float32 bytes. The MLX trainer records outputs after quantization. Existing checks compare those fixtures directly with real Chromium WebGPU, including buffer lifecycle and concurrent calls. A small JavaScript reference supports Node-only compiler checks; it is not imported by deployed entrypoints.
 
-The complete cron library has a 40,000-byte Brotli budget, raised from 30,000 for this richer network. Size measurements include preparation, decoding, metadata, weights and WGSL. Demo HTML/CSS are separate. Production checks reject ONNX/WASM payloads and runtime dependencies.
+The complete cron library has a 40,000-byte Brotli budget, raised from 30,000 for this richer network. Size measurements include preparation, decoding, metadata, weights and WGSL. Demo HTML/CSS are separate. Production checks reject WASM payloads and runtime dependencies.
 
 ## References
 

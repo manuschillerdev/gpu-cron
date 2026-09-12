@@ -36,9 +36,9 @@ Reports in `training/evaluation/` bind results to weights, dataset, feature enco
 
 Weights occupy **26,838 packed bytes**, expanded to 143,132 float32 bytes. The complete minified library is 62,194 bytes, or **31,898 bytes (31.2 KiB) Brotli-compressed**. This includes API, features, weights, metadata, decoding and WGSL; demo HTML/CSS are separate. The complete-bundle budget increased from 30,000 to 40,000 bytes for the richer network.
 
-The runtime reuses the device, pipelines, weights and buffers, queues calls and chunks batches at 128. Inputs retain the 512-character limit; training uses a 64-token bucket. Long-input and multilingual generalization are unmeasured. Six-bit quantization and platform differences are checked against MLX and the optional ONNX verification graph using the existing fixtures and real Chromium WebGPU. No new regression cases were added.
+The runtime reuses the device, pipelines, weights and buffers, queues calls and chunks batches at 128. Inputs retain the 512-character limit; training uses a 64-token bucket. Long-input and multilingual generalization are unmeasured. Six-bit quantization and platform differences are checked by comparing the existing quantized MLX fixtures directly with real Chromium WebGPU. No new regression cases were added.
 
-ONNX remains a development-only portable export (175,307 bytes). No ONNX, WASM loader or runtime dependency ships in the browser.
+No model loader, WASM payload or runtime dependency ships in the browser.
 
 ## Candidate promotion
 
@@ -51,6 +51,5 @@ mise exec -- pnpm run prepare:cron-data
 mise run train:cron
 mise exec -- pnpm run evaluate:cron:candidate
 mise exec -- pnpm run promote:cron
-mise exec -- pnpm run export:onnx
 mise run check
 ```

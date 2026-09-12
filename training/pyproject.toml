@@ -16,9 +16,6 @@ dev = [
     "ruff>=0.16.7",
     "ty>=0.0.80",
 ]
-verification = [
-    "onnx>=1.17,<2",
-]
 
 [tool.ruff]
 target-version = "py311"

@@ -29,5 +29,5 @@ for (const [source, destination] of [
   await copyFile(`training/candidate/${source}`, destination);
 }
 console.log(
-  'Promoted candidate artifacts. Run pnpm run export:onnx to refresh the optional verification graph, then mise run check before committing.',
+  'Promoted candidate artifacts. Run mise run check before committing.',
 );

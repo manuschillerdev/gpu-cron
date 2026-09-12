@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 for (const args of [
   ['ruff', 'check', '.'],
   ['ruff', 'format', '--check', '.'],
-  ['--group', 'verification', 'ty', 'check'],
+  ['ty', 'check'],
   ['pytest'],
 ]) {
   const result = spawnSync('uv', ['run', '--locked', ...args], {

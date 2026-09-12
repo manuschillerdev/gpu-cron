@@ -4,14 +4,14 @@ import assert from 'node:assert/strict';
 import {readdir} from 'node:fs/promises';
 
 const assets = await readdir('site/assets');
-assert.ok(assets.every(name => !/\.wasm$|\.onnx$|ort-wasm/.test(name)), 'Production output must contain no ONNX/WASM payloads');
+assert.ok(assets.every(name => !/\.wasm$/.test(name)), 'Production output must contain no WASM payloads');
 const server = await preview({preview:{host:'127.0.0.1',port:4180,strictPort:false},logLevel:'error'});
 let browser;
 try {
   browser = await chromium.launch({channel:'chromium',headless:true,args:['--enable-unsafe-webgpu']});
   const page = await browser.newPage();
   const forbidden = [], errors = [];
-  page.on('request',r=>{if(/onnxruntime|ort-wasm|\.(onnx|wasm)(?:\?|$)/.test(r.url()))forbidden.push(r.url());});
+  page.on('request',r=>{if(/\.wasm(?:\?|$)/.test(r.url()))forbidden.push(r.url());});
   page.on('pageerror',e=>errors.push(e.message));
   const base = server.resolvedUrls.local[0];
   await page.goto(base);
@@ -19,5 +19,5 @@ try {
   assert.equal(await page.locator('#copy').isDisabled(),false);
   assert.deepEqual(forbidden,[]);
   assert.deepEqual(errors,[]);
-  console.log('The production demo passes on WebGPU with zero ONNX/WASM assets or requests.');
+  console.log('The production demo passes on WebGPU with zero WASM assets or requests.');
 } finally { await browser?.close(); await new Promise(resolve=>server.httpServer.close(resolve)); }

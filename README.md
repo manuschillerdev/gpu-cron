@@ -2,7 +2,7 @@
 
 Turn English recurring schedules into structured calendar rules, five-field cron, and timezone-aware previews. A 35,783-parameter MLX-trained sequence model reads context in both directions and predicts semantic roles for clock values, weekdays and exclusions on WebGPU. TypeScript interprets those predicted values and resolves the exact calendar. There is no CPU inference fallback.
 
-The browser package embeds packed learned weights and a purpose-built WGSL runtime with zero runtime dependencies. MLX trains the model; ONNX exports are development-only verification artifacts.
+The browser package embeds packed learned weights and a purpose-built WGSL runtime with zero runtime dependencies. MLX trains the model; real browser checks compare the WGSL outputs directly with quantized MLX fixtures.
 
 ## Run locally
 
@@ -120,7 +120,6 @@ mise exec -- pnpm run prepare:cron-data    # generate inspectable JSONL files
 mise run train:cron                       # train a candidate from those files
 mise exec -- pnpm run evaluate:cron:candidate # WebGPU parity + semantic quality gate
 mise exec -- pnpm run promote:cron        # recheck, then promote candidate artifacts
-mise exec -- pnpm run export:onnx         # refresh optional verification graph
 mise run check
 mise run benchmark:training
 ```
@@ -131,26 +130,25 @@ The candidate gate requires at least 2,649/2,661 exact generated schedules, 485/
 
 The network sums learned 24-dimensional word-hash, consonant-hash and shape embeddings, runs bidirectional affine scans, and predicts 16 semantic roles plus seven family scores. It has no word-vocabulary lookup or shared unknown-word ID. All inference operators are specialized WGSL, independent of the training framework. `src/model/vocabulary.json` is only a training-word audit artifact.
 
-The shipped model's recorded M2 Max run took 107.5 seconds for 45 epochs using the earlier pipeline that regenerated phrasings each epoch. New runs train from the fixed JSONL corpus; that historical timing and accuracy do not measure the new training workflow. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`. The separate ONNX export verifies the exact shipped coefficients; it is not imported by the browser. `mise exec -- pnpm run export:onnx` exports existing weights without retraining.
+The shipped model's recorded M2 Max run took 107.5 seconds for 45 epochs using the earlier pipeline that regenerated phrasings each epoch. New runs train from the fixed JSONL corpus; that historical timing and accuracy do not measure the new training workflow. Checkpoints preserve model, optimizer, RNG and epoch identity. Resume using `mise exec -- uv run --locked --project training python training/train.py --resume`.
 
 Actual WebGPU evaluation now produces **116/120 exact authored schedules**, versus the original 23/120. The compiler produces 120/120 with annotated roles, versus 29/120. **9/80 unsupported or ambiguous authored requests are still incorrectly accepted.** These are development results on assistant-authored requests, not broad real-user accuracy. Old token scores are not directly comparable because the label vocabulary changed. See [MODEL_CARD.md](MODEL_CARD.md) and [the data protocol](training/data/README.md).
 
 Inspect or edit `training/data/train.jsonl` before training. Labels are read as stored, with token-offset, role, family, and split-leakage validation. `--data-dir PATH` selects another directory containing `train.jsonl`, `development.jsonl`, `patternHoldout.jsonl`, and `authored.jsonl`. Training snapshots the loaded records under `training/candidate/data/` for later evaluation and resume identity. Checks and evaluation never regenerate these inputs. Rerunning `prepare:cron-data` intentionally replaces generated data, so keep any curated edits elsewhere first.
 
-Evaluation reports normally go to ignored `test-artifacts/evaluation/`; pass `--write` directly to `scripts/evaluate-cron.mjs` to refresh committed reports. Candidate reports stay alongside the candidate. Historical training and export source hashes are preserved in the provenance reports under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
+Evaluation reports normally go to ignored `test-artifacts/evaluation/`; pass `--write` directly to `scripts/evaluate-cron.mjs` to refresh committed reports. Candidate reports stay alongside the candidate. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
 
 ## Source map
 
 - `src/features.ts`: mechanical tokenization and packed word-hash, consonant-hash and shape features.
 - `src/model/`: packed model, specialized GPU runtime, and weight decoding.
-- `models/`: optional verification ONNX graph and export provenance.
 - `src/compile.ts`: semantic-value decoding, typed recurrence, descriptions and cron export.
 - `src/calendar.ts`: local calendar matching and DST-aware future instants.
 - `training/`: generator, trainer, uv lockfile, and measured provenance.
 - `test/`: semantic examples, rejection cases, DST policy, and MLX parity.
 - `demo/`: browser playground.
 
-The cron contract follows the [crontab manual](https://man7.org/linux/man-pages/man5/crontab.5.html), particularly field-step resets and the OR relationship between restricted day fields. Browser inference uses WebGPU directly; ONNX Runtime is a development-only numerical reference.
+The cron contract follows the [crontab manual](https://man7.org/linux/man-pages/man5/crontab.5.html), particularly field-step resets and the OR relationship between restricted day fields. Browser inference uses WebGPU directly, verified against MLX fixtures.
 
 MIT licensed. Inspired by the small-model approach in [gpu-time](https://github.com/arikchakma/gpu-time) and [gpu-lexer](https://github.com/vercel-labs/gpu-lexer); implementation and training data here are original.
 
@@ -158,4 +156,4 @@ MIT licensed. Inspired by the small-model approach in [gpu-time](https://github.
 
 Use `mise exec -- pnpm add <package>` for JavaScript dependencies and `mise exec -- uv add --project training <package>` for Python dependencies. Commit the corresponding lockfile with manifest changes. Tool versions belong in `mise.toml`; keep Node requirements, `packageManager`, `.python-version` and `UV_PYTHON` consistent with those pins.
 
-`mise run train:cron` writes packed weights, MLX fixtures, data identity, and a report to ignored `training/candidate/`. It never replaces shipped artifacts. `promote:cron` reruns actual WebGPU/MLX parity and exact-schedule/rejection evaluation and the complete-bundle size budget before copying the candidate into the project. ONNX is an optional uv verification group, installed only by checks that need it and the separate export command.
+`mise run train:cron` writes packed weights, MLX fixtures, data identity, and a report to ignored `training/candidate/`. It never replaces shipped artifacts. `promote:cron` reruns actual WebGPU/MLX parity and exact-schedule/rejection evaluation and the complete-bundle size budget before copying the candidate into the project.

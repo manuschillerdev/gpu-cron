@@ -39,7 +39,7 @@ if (
 )
   throw new Error(`cron must bundle standalone, including weights and runtime`);
 const code = chunks.map((c) => c.code).join('\n');
-if (/onnxruntime|ort-wasm|\.wasm\b/.test(code))
+if (/\.wasm\b/.test(code))
   throw new Error(`cron unexpectedly includes a general runtime`);
 const report = {
   minifiedBytes: Buffer.byteLength(code),

@@ -72,6 +72,6 @@
       "trainingSourceSha256": "e068d7621ac72b4c4a772b28b65d9b72d8322376aaf45ab4af4e561fc0818daf",
       "dataSourceSha256": "47d9732dd2878fda5948531ee2566aea947fbcb0402ce7c697d921843b3c0615"
     },
-    "note": "Weights, MLX fixtures, and ONNX graph are unchanged. Top-level source hashes identify the maintained source; originalSourceHashes identify the source that produced the recorded artifacts and training measurements."
+    "note": "Weights and MLX fixtures are unchanged. Top-level source hashes identify the maintained source; originalSourceHashes identify the source that produced the recorded artifacts and training measurements."
   }
 }

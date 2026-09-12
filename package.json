@@ -33,7 +33,6 @@
     "evaluate:cron:holdout": "pnpm run build && node scripts/evaluate-cron.mjs --holdout",
     "size": "pnpm run build && node scripts/size.mjs",
     "check": "pnpm run check:python && pnpm run typecheck && pnpm run build && node --test test/*.test.mjs && pnpm run build:demo && pnpm run test:production && node scripts/browser-test.mjs && node scripts/evaluate-cron.mjs --check && node scripts/size.mjs",
-    "export:onnx": "uv run --locked --project training --group verification python training/export_onnx.py",
     "test:production": "node scripts/production-test.mjs",
     "evaluate:cron:candidate": "node scripts/evaluate-cron.mjs --candidate --check",
     "promote:cron": "node scripts/promote-model.mjs",
@@ -43,7 +42,6 @@
   "devDependencies": {
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@webgpu/types": "^0.1.69",
-    "onnxruntime-web": "^1.29.0",
     "playwright": "^1.58.2",
     "prettier": "3.9.6",
     "vite": "^7.3.1"

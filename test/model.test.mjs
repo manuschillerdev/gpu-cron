@@ -2,26 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { features, FEATURE_COUNT } from '../dist/features.js';
+import { features } from '../dist/features.js';
 import { MODEL_INFO } from '../dist/model/parameters.js';
 import { cpuLogits } from '../scripts/cron-reference.mjs';
-
-test('packed cron scores match the optional ONNX verification graph', async () => {
-  const ort = await import('onnxruntime-web');
-  ort.env.wasm.numThreads = 1;
-  const session = await ort.InferenceSession.create(await readFile(new URL('../models/cron.onnx', import.meta.url)), {executionProviders:['wasm']});
-  try {
-    const fixtures = JSON.parse(await readFile(new URL('./model-fixtures.json', import.meta.url)));
-    const input = new Float32Array(fixtures.length * FEATURE_COUNT);
-    fixtures.forEach((f,i) => input.set(features(f.text),i*FEATURE_COUNT));
-    const tensor = new ort.Tensor('float32',input,[fixtures.length,FEATURE_COUNT]);
-    const outputs = await session.run({features:tensor});
-    try {
-      const reference = cpuLogits(input);
-      assert.ok(outputs.logits.data.reduce((max,v,i)=>Math.max(max,Math.abs(v-reference[i])),0) < .0001);
-    } finally { tensor.dispose(); Object.values(outputs).forEach(t=>t.dispose()); }
-  } finally { await session.release(); }
-});
 
 test('JavaScript features and quantized inference match the MLX export', async () => {
   const fixtures = JSON.parse(await readFile(new URL('./model-fixtures.json', import.meta.url)));
@@ -48,14 +31,4 @@ test('the shipped model matches its provenance report', async () => {
     assert.equal(createHash('sha256').update(await readFile(new URL(path,import.meta.url))).digest('hex'),hash);
   }
   assert.equal(createHash('sha256').update(await readFile(new URL('./model-fixtures.json', import.meta.url))).digest('hex'), report.fixturesSha256);
-});
-
-test('verification ONNX artifact and source weights match export provenance', async () => {
-  const report = JSON.parse(await readFile(new URL('../models/cron-export.json', import.meta.url)));
-  for (const [path, expected] of [
-    ['../models/cron.onnx', report.modelSha256],
-    ['../src/model/weights.json', report.sourceWeightsSha256],
-    ['../training/export_onnx.py', report.exportSourceSha256],
-  ]) assert.equal(createHash('sha256').update(await readFile(new URL(path, import.meta.url))).digest('hex'), expected);
-  assert.equal(report.onnxCheckerPassed, true);
 });
