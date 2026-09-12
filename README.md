@@ -137,7 +137,7 @@ Each JSONL line is one annotated object: `text`, `family`, canonical `groupId`, 
 
 Inspect or edit `training/data/train.jsonl` before training. Labels are read as stored, with token-offset, role, family, and split-leakage validation. `--data-dir PATH` selects another directory containing `train.jsonl`, `development.jsonl`, `patternHoldout.jsonl`, and `authored.jsonl`. Training snapshots the loaded records under `training/candidate/data/` so evaluation uses the same data. Checks and evaluation never regenerate these inputs. Rerunning `prepare:cron-data` intentionally replaces generated data, so keep any curated edits elsewhere first.
 
-Evaluation reports go to ignored `test-artifacts/evaluation/`. Candidate reports stay alongside the candidate. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source hashes identify the maintained pipeline without implying that unchanged weights were retrained.
+The trainer fits and exports; `evaluate.mjs` computes quality metrics using actual WebGPU inference. Evaluation reports go to ignored `test-artifacts/evaluation/`. Candidate reports stay alongside the candidate. Historical training source hashes are preserved in the training report under `sourceMaintenance`; current source and manifest hashes identify the maintained pipeline without implying that unchanged weights were retrained. Generator version 13 removes unused templates; its training wording differs from the shipped model’s historical corpus, while evaluation examples and split meanings are unchanged.
 
 ## Source map
 

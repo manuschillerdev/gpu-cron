@@ -244,8 +244,7 @@ try {
       runtimeSha256: sha(await readFile('src/model/runtime.ts')),
       weightsSha256: sha(await readFile(weightsPath)),
       manifestSha256: sha(await readFile(dataDirectory + '/manifest.json')),
-      evaluationUse:
-        'Development: prior results informed this iteration; these are not untouched holdouts.',
+      evaluationUse: 'Development regression benchmark; see MODEL_CARD.md.',
       annotationVersion: 2,
       executionProvider: 'webgpu',
       context: { timeZone: 'UTC', reference: '2026-09-14T00:00:00Z' },
@@ -255,8 +254,6 @@ try {
           .sort()
           .map((c) => [c, summarize(outcomes.filter((r) => r.category === c))]),
       ),
-      interpretation:
-        'Network labels, actual compiler output, and compiler output given annotated labels are scored separately. Canonical schedule comparison excludes redundant family labels and fixes timezone/alternate-week context. Authored requests are assistant-written, not real-user traffic. Evaluation requests are not fitted by the trainer; prior evaluation findings informed generator and compiler development. Token labels changed from coarse clauses to semantic roles, so token accuracy is not directly comparable with the old model.',
     };
     await mkdir(reportDirectory, { recursive: true });
     await writeFile(reportDirectory + '/' + name + '.json', JSON.stringify(report, null, 2) + '\n');

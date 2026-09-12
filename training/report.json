@@ -23,8 +23,8 @@
   "trainingExamples": 23177,
   "trainingSeconds": 107.45288179203635,
   "dataVersion": 12,
-  "dataSourceSha256": "223517bbcd752c3ad04971cf14f4bbfb4a48b95490fcf16aebf9d4b7cdb887f8",
-  "trainingSourceSha256": "d5a1740bee572aaeac68061c6d618794eef66d3f7d7ca11b79653230d0ab73d8",
+  "dataSourceSha256": "c4fbbb786d28b9f8b6f6c9301b426baaee8d7f063e1689b84a2eaccab8b0ca1a",
+  "trainingSourceSha256": "e6f38c1267d69d43eddf7b909849fe6449333432b22fdf3e878e78d628b083a9",
   "weightsSha256": "d24912a65af2708ddcbdf60c2657e171a4f76bad887aeb126b1d74928bb78f41",
   "fixturesSha256": "9c8ffefe49e25fb3ffc8d4278552c62945809751efce4717028e89a2029947c3",
   "validation": {
@@ -61,7 +61,7 @@
     }
   },
   "split": "Canonical structured meaning before rendering; authored meanings reserved from generated splits.",
-  "manifestSha256": "1668266fe34e145e05995135c7fe27ca86848f4c6ca07d6fa8b41afc16a75103",
+  "manifestSha256": "fde44124a4a6857252c925f6d611d7d97e514482630b40f5cca7f4f71120219b",
   "limitation": "Family plus token-span metrics are not end-to-end schedule accuracy. The typed compiler still interprets values and checks schedule semantics. Real-user accuracy is unmeasured.",
   "totalSeconds": 110.43997570802458,
   "sourceMaintenance": {
@@ -70,6 +70,7 @@
       "trainingSourceSha256": "e068d7621ac72b4c4a772b28b65d9b72d8322376aaf45ab4af4e561fc0818daf",
       "dataSourceSha256": "47d9732dd2878fda5948531ee2566aea947fbcb0402ce7c697d921843b3c0615"
     },
-    "note": "Weights and MLX fixtures are unchanged. Top-level source hashes identify the maintained source; originalSourceHashes identify the source that produced the recorded artifacts and training measurements."
+    "note": "Weights and MLX fixtures are unchanged. Top-level source and manifest hashes identify the maintained pipeline and prepared data. Original hashes and the recorded training measurements describe the historical version-12 model; generator version 13 changes training wording only.",
+    "originalManifestSha256": "1668266fe34e145e05995135c7fe27ca86848f4c6ca07d6fa8b41afc16a75103"
   }
 }

@@ -8,9 +8,9 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = 12
+VERSION = 13
 SEED = 7319
-VOCAB = 1312
+EMBEDDING_ROWS = 1024 + 256 + 32
 WIDTH = 24
 MAX_TOKENS = 512
 FAMILIES = ["minutes", "hours", "daily", "weekly", "biweekly", "monthly", "invalid"]
@@ -516,62 +516,6 @@ def spoken_clock(hour, minute, rng):
 
 def render_unsupported(m, rng, pattern):
     """Unsupported requests still teach the roles of their ordinary schedule words."""
-    phrases = {
-        "relative": ["tomorrow at noon", "in five minutes", "next friday"],
-        "event": [
-            "when the server starts",
-            "after deployment",
-            "when the build finishes",
-        ],
-        "vague": ["sometime soon", "after work", "when convenient"],
-        "annual": ["once a year", "every leap year", "annually"],
-        "nth-weekday": [
-            f"every {rng.choice(ORDINALS[1:5])} {rng.choice(DAYS)} of the month at noon",
-            "on the second friday each month",
-            "every last tuesday of the month",
-        ],
-        "bounded": [
-            f"every {rng.choice([5, 10, 15])} minutes between {rng.randrange(1, 12)}am and 5pm",
-            f"daily at {rng.randrange(24)}:00 until friday",
-            "every hour for the next two days",
-            "every friday starting next week",
-        ],
-        "multi-clock": [
-            f"every day at {rng.randrange(1, 12)}am and {rng.randrange(1, 12)}pm",
-            "on monday at noon and friday at midnight",
-        ],
-        "business": [
-            f"every {rng.choice(DAYS)} at noon except holidays",
-            "daily at noon unless the office is closed",
-            "every first business day of the month",
-        ],
-        "timezone": [
-            f"daily at {rng.randrange(24)}:00 {rng.choice(['UTC', 'Europe/Berlin', 'New York time', 'Pacific time'])}"
-        ],
-        "uncertain": [
-            "every few hours should be fine",
-            "weekdays around nine",
-            "daily at eight-ish",
-            "every trading day at noon",
-            "every minus two hours",
-            "weekly at half five",
-        ],
-        "invalid-value": [
-            "every zero minutes",
-            "every 0 hours",
-            "every 25 hours",
-            "daily at 25:00",
-        ],
-        "non-request": [
-            "what does this schedule mean",
-            "please cancel the friday job",
-            "do not run anything",
-            "every day is different",
-            "I might need an hourly job later",
-        ],
-    }
-    if rng.random() < 0.5:
-        phrases[m["kind"]] = ["please " + t for t in phrases[m["kind"]]]
     kind = m["kind"]
     if kind == "invalid-value":
         family = rng.choice(["minutes", "hours", "daily"])
@@ -619,7 +563,7 @@ def render_unsupported(m, rng, pattern):
             "timezone": ["UTC", "Europe/Berlin", "Pacific time"],
             "multi-clock": [f"and {rng.randrange(1, 12)}pm"],
         }
-        item = record(
+        return record(
             [
                 (rng.choice(["daily ", "every day ", "each day "]), "recurrence"),
                 (f"at {hour:02d}:00 ", "time"),
@@ -630,10 +574,35 @@ def render_unsupported(m, rng, pattern):
             pattern,
             kind,
         )
-        return item
-    return record(
-        [(rng.choice(phrases[kind]), "unknown")], "invalid", m["target"], pattern, kind
-    )
+    phrases = {
+        "relative": ["tomorrow at noon", "in five minutes", "next friday"],
+        "event": [
+            "when the server starts",
+            "after deployment",
+            "when the build finishes",
+        ],
+        "vague": ["sometime soon", "after work", "when convenient"],
+        "annual": ["once a year", "every leap year", "annually"],
+        "uncertain": [
+            "every few hours should be fine",
+            "weekdays around nine",
+            "daily at eight-ish",
+            "every trading day at noon",
+            "every minus two hours",
+            "weekly at half five",
+        ],
+        "non-request": [
+            "what does this schedule mean",
+            "please cancel the friday job",
+            "do not run anything",
+            "every day is different",
+            "I might need an hourly job later",
+        ],
+    }
+    text = rng.choice(phrases[kind])
+    if rng.random() < 0.5:
+        text = "please " + text
+    return record([(text, "unknown")], "invalid", m["target"], pattern, kind)
 
 
 def render(m, rng, pattern):
@@ -1019,7 +988,8 @@ def load_datasets(directory=DATA):
     return sets
 
 
-def write_manifest(sets, directory=DATA):
+def write_datasets(sets, directory=DATA):
+    """Write annotated JSONL and its split manifest together."""
     directory.mkdir(parents=True, exist_ok=True)
     counts = {}
     for split, items in sets.items():
@@ -1054,4 +1024,4 @@ def write_manifest(sets, directory=DATA):
 
 
 if __name__ == "__main__":
-    print(json.dumps(write_manifest(datasets()), indent=2))
+    print(json.dumps(write_datasets(datasets()), indent=2))

@@ -6,9 +6,6 @@ training/candidate/
 .ruff_cache/
 .pytest_cache/
 training/__pycache__/
-training/checkpoint.safetensors
-training/optimizer.safetensors
-training/progress.json
 training/data/train.jsonl
 training/data/development.jsonl
 training/data/patternHoldout.jsonl

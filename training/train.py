@@ -17,17 +17,17 @@ from mlx.utils import tree_flatten, tree_unflatten
 
 from data import (
     DATA,
+    EMBEDDING_ROWS,
     FAMILIES,
     MAX_TOKENS,
     ROLES,
     SEED,
     VERSION,
-    VOCAB,
     WIDTH,
     features,
     load_datasets,
     row,
-    write_manifest,
+    write_datasets,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +60,7 @@ def scan(a, b):
 class Model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.embedding = nn.Embedding(VOCAB, WIDTH)
+        self.embedding = nn.Embedding(EMBEDDING_ROWS, WIDTH)
         self.affine = nn.Linear(WIDTH, WIDTH * 2)
         self.hidden = nn.Linear(WIDTH * 3, 32)
         self.output = nn.Linear(32, len(FAMILIES) + len(ROLES))
@@ -153,31 +153,6 @@ def arrays(rows):
     )
 
 
-def count_true(mask: mx.array) -> int:
-    return int(np.asarray(mx.sum(mask)))
-
-
-def evaluate(model, rows):
-    correct = exact = token_correct = token_count = 0
-    for start in range(0, len(rows), 256):
-        xx, yy, rr = arrays(rows[start : start + 256])
-        out = model(xx)
-        family = out[:, :FAMILY_COUNT].argmax(1)
-        tags = out[:, FAMILY_COUNT:].reshape(*xx.shape, len(ROLES)).argmax(-1)
-        ok = (tags == rr) | (xx == 0)
-        correct += count_true(family == yy)
-        exact += count_true(mx.all(ok, axis=1) & (family == yy))
-        token_correct += count_true((tags == rr) & (xx != 0))
-        token_count += count_true(xx != 0)
-    return {
-        "correct": correct,
-        "total": len(rows),
-        "familyAccuracy": correct / len(rows),
-        "exactFamilyAndSpans": exact / len(rows),
-        "tokenAccuracy": token_correct / token_count,
-    }
-
-
 def pack_weights(model):
     segments, values = [], []
     for name, value in tree_flatten(model.parameters()):
@@ -215,7 +190,7 @@ def pack_weights(model):
         "format": 3,
         "architecture": "feature-sum-bidirectional-affine-scan",
         "features": MAX_TOKENS,
-        "vocabulary": VOCAB,
+        "embeddingRows": EMBEDDING_ROWS,
         "hidden": WIDTH,
         "families": FAMILIES,
         "roles": ROLES,
@@ -303,14 +278,12 @@ def main():
     sets = load_datasets(args.data_dir)
     CANDIDATE.mkdir(parents=True, exist_ok=True)
     use_gpu()
-    manifest = write_manifest(
-        sets, CANDIDATE / "data"
-    )  # Snapshot the loaded records and split identity before fitting.
+    # Evaluation must use the same records as this training run.
+    write_datasets(sets, CANDIDATE / "data")
     model, train_seconds, training_examples = fit(sets, args.epochs)
-    validation = [row(item) for item in sets["development"]]
     payload, artifact, packed_bytes = pack_weights(model)
     (CANDIDATE / "weights.json").write_text(artifact)
-    # Reuse the existing verification examples; do not add test cases.
+    # Export quantized MLX outputs for the browser parity check.
     fixture_path = ROOT / "test/model-fixtures.json"
     texts = [f["text"] for f in json.loads(fixture_path.read_text())]
     xx = mx.array(np.stack([features(t) for t in texts]))
@@ -331,17 +304,13 @@ def main():
         "framework": "mlx",
         "frameworkVersion": version("mlx"),
         "device": "gpu",
-        "deviceInfo": mx.device_info(),
-        "compiled": True,
+        "deviceName": mx.device_info()["device_name"],
         "architecture": payload["architecture"],
         "parameters": payload["parameters"],
         "packedWeightBytes": packed_bytes,
         "quantization": "signed six-bit per tensor, final 12 epochs deployment-matched fake quantization",
         "epochs": args.epochs,
         "batchSize": 256,
-        "sampling": "Fixed annotated JSONL records loaded once; uniform family sampling with replacement each epoch",
-        "dataFormat": "jsonl",
-        "regularization": "8% token embedding dropout and 10% bidirectional context dropout during training only",
         "trainingExamples": training_examples,
         "trainingSeconds": train_seconds,
         "dataVersion": VERSION,
@@ -349,19 +318,11 @@ def main():
         "trainingSourceSha256": sha(Path(__file__)),
         "weightsSha256": sha(CANDIDATE / "weights.json"),
         "fixturesSha256": sha(fixture_path),
-        "validation": evaluate(model, validation),
-        "holdouts": {
-            "status": "Candidate only; WebGPU semantic evaluation is required before promotion",
-            "command": "pnpm run evaluate:cron:candidate",
-            "splits": manifest["splits"],
-        },
-        "split": manifest["grouping"],
         "manifestSha256": sha(CANDIDATE / "data/manifest.json"),
-        "limitation": "Family plus token-span metrics are not end-to-end schedule accuracy. The typed compiler still interprets values and checks schedule semantics. Real-user accuracy is unmeasured.",
         "totalSeconds": time.perf_counter() - started,
     }
     (CANDIDATE / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(json.dumps(report, indent=2))
+    print(f"Candidate written to {CANDIDATE}. Run pnpm run evaluate:cron:candidate.")
 
 
 if __name__ == "__main__":
